@@ -1,26 +1,311 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   Dark mode strategy : on s'appuie sur [data-theme="dark"]
+   posé sur <html> (cohérent avec les maquettes v0.3).
+   ============================================================ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ============================================================
+   Architask Design Tokens — Light (par défaut)
+   Source : mockups_Architask_v0.3.html, lignes 12-47
+   ============================================================ */
+:root,
+[data-theme="light"] {
+  /* Surfaces */
+  --bg-base: #F4F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #EEEFF2;
+  --surface-3: #E4E6EB;
+
+  /* Texte */
+  --text-primary: #0B0B0F;
+  --text-secondary: #5F6675;
+  --text-tertiary: #9AA0AB;
+
+  /* Brand */
+  --brand: #1F2DEA;
+  --brand-soft: #EEF0FF;
+
+  /* Token "black" — s'inverse en dark mode (devient blanc)
+     pour que les cards "card-black" restent en accent fort. */
+  --black: #0B0B0F;
+
+  /* Mint */
+  --mint-50: #ECFDF5;
+  --mint-100: #DCFCE7;
+  --mint-200: #B8F2D1;
+  --mint-300: #86EFAC;
+  --mint-700: #15803D;
+  --mint-900: #064E2C;
+
+  /* Lilac */
+  --lilac-50: #F5F3FF;
+  --lilac-100: #EDE9FE;
+  --lilac-200: #DDD6FE;
+  --lilac-300: #C4B5FD;
+  --lilac-700: #6D28D9;
+  --lilac-900: #3B1B7A;
+
+  /* Sémantique */
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --danger: #DC2626;
+  --info: #0EA5E9;
+
+  /* Bordures */
+  --border: rgba(11, 11, 15, 0.06);
+  --border-strong: rgba(11, 11, 15, 0.12);
+
+  /* Ombres */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-2: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --shadow-3: 0 20px 60px rgba(0, 0, 0, 0.10);
+
+  /* Radius (4 niveaux de PRD + hero/card-xl maquettes) */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-hero: 28px;
+  --radius-card-xl: 32px;
+
+  /* Mouvement (durées + easing Apple-like) */
+  --ease-out-apple: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
 }
 
+/* ============================================================
+   Architask Design Tokens — Dark
+   ============================================================ */
+[data-theme="dark"] {
+  --bg-base: #07080A;
+  --surface: #14161B;
+  --surface-2: #1C1E25;
+  --surface-3: #262932;
+
+  --text-primary: #F4F5F7;
+  --text-secondary: #A8AEBC;
+  --text-tertiary: #6C7383;
+
+  --brand: #4F5DFF;
+  --brand-soft: rgba(79, 93, 255, 0.14);
+
+  /* En dark, --black s'inverse pour que les cards d'accent
+     restent un contre-point fort sur fond presque noir. */
+  --black: #FFFFFF;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+}
+
+/* ============================================================
+   Mapping des tokens vers les utilities Tailwind v4.
+   Permet d'écrire bg-surface, text-text-secondary, rounded-hero, …
+   ============================================================ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  --color-bg-base: var(--bg-base);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+
+  --color-mint-50: var(--mint-50);
+  --color-mint-100: var(--mint-100);
+  --color-mint-200: var(--mint-200);
+  --color-mint-300: var(--mint-300);
+  --color-mint-700: var(--mint-700);
+  --color-mint-900: var(--mint-900);
+
+  --color-lilac-50: var(--lilac-50);
+  --color-lilac-100: var(--lilac-100);
+  --color-lilac-200: var(--lilac-200);
+  --color-lilac-300: var(--lilac-300);
+  --color-lilac-700: var(--lilac-700);
+  --color-lilac-900: var(--lilac-900);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-hero: var(--radius-hero);
+  --radius-card-xl: var(--radius-card-xl);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================================
+   Reset / base
+   ============================================================ */
+html,
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-feature-settings: "ss01", "cv11";
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   Typographie — utilities
+   ============================================================ */
+.font-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.num-hero {
+  font-size: 72px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+}
+.num-xl {
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.num-lg {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+.num-md {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.title-hero {
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+}
+.title-xl {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.title-lg {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+.title-md {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.label-eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.label-muted {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.label-dim {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ============================================================
+   Cards — variantes principales (radius 28-32)
+   ============================================================ */
+.card-l {
+  background: var(--surface);
+  border-radius: 28px;
+  box-shadow: var(--shadow-1);
+}
+.card-xl {
+  background: var(--surface);
+  border-radius: 32px;
+}
+.card-black {
+  background: var(--black);
+  color: var(--surface);
+  border-radius: 28px;
+}
+[data-theme="dark"] .card-black {
+  color: var(--text-primary);
+}
+.card-mint {
+  background: linear-gradient(135deg, var(--mint-200) 0%, var(--mint-100) 100%);
+  color: var(--mint-900);
+  border-radius: 28px;
+}
+.card-lilac {
+  background: linear-gradient(135deg, var(--lilac-200) 0%, var(--lilac-100) 100%);
+  color: var(--lilac-900);
+  border-radius: 28px;
+}
+.card-section {
+  background: var(--surface-2);
+  border-radius: 24px;
+}
+
+/* ============================================================
+   Divers — glass, divider, kbd, arrow ↗
+   ============================================================ */
+.divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.glass {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(244, 245, 247, 0.78);
+}
+[data-theme="dark"] .glass {
+  background: rgba(7, 8, 10, 0.78);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+.arrow-up {
+  display: inline-block;
+  transform: rotate(-45deg);
+}
+
+.sparkline path {
+  fill: none;
+  stroke-width: 2;
 }
