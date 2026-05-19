@@ -348,8 +348,10 @@ export function CpDetailClient({ cp }: { cp: CpData }) {
               </Button>
             </a>
           </div>
+          {/* Cache-buster pour éviter que le navigateur serve l'ancienne
+              version cachée du PDF après une modification du CP. */}
           <iframe
-            src={`/api/cps/${cp.id}/pdf`}
+            src={`/api/cps/${cp.id}/pdf?t=${(cp.signedAt ?? cp.id).toString()}`}
             className="w-full"
             style={{ height: 900, border: 0 }}
             title="PDF du CP"

@@ -151,6 +151,19 @@ export function CpCreateDrawer({
     setOcrLoading(false);
 
     if (res.error || !res.data) {
+      // Cas spécial : situation déjà existante pour ce lot+période →
+      // on affiche un toast actionnable avec un bouton "Voir / mettre à
+      // jour" plutôt qu'une erreur brute.
+      if (res.code === "situation_exists") {
+        toast.warning(res.error ?? "Situation déjà présente pour cette période.", {
+          action: {
+            label: "Changer de période",
+            onClick: () => setOcrError("Choisis une autre période pour éviter le doublon."),
+          },
+          duration: 10000,
+        });
+        return;
+      }
       setOcrError(res.error ?? "Échec OCR.");
       return;
     }
@@ -808,6 +821,10 @@ function Row({
 // ---------------------------------------------------------------
 
 function Step3({ cpId }: { cpId: string }) {
+  // Cache-buster : nouveau timestamp à chaque mount du composant pour
+  // forcer le navigateur à re-fetcher le PDF (sinon il peut servir la
+  // version cachée de l'itération précédente).
+  const [cacheBuster] = React.useState(() => Date.now());
   return (
     <div className="space-y-4">
       <div
@@ -827,7 +844,7 @@ function Step3({ cpId }: { cpId: string }) {
         }}
       >
         <iframe
-          src={`/api/cps/${cpId}/pdf`}
+          src={`/api/cps/${cpId}/pdf?t=${cacheBuster}`}
           className="w-full h-full"
           title="Aperçu PDF du CP"
         />

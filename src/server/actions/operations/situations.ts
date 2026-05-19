@@ -103,6 +103,23 @@ export async function createSituationFromManual(
       );
     }
 
+    // Preflight : vérifie que la situation n'existe pas déjà pour cette
+    // période (unique index lot_id + periode_annee + periode_mois).
+    const conflict = await db.query.situations.findFirst({
+      where: and(
+        eq(situations.lotId, input.lotId),
+        eq(situations.periodeMois, input.periodeMois),
+        eq(situations.periodeAnnee, input.periodeAnnee),
+      ),
+      columns: { id: true },
+    });
+    if (conflict) {
+      return err(
+        "Une situation existe déjà pour ce lot et cette période. Tu peux la mettre à jour ou choisir une autre période.",
+        "situation_exists",
+      );
+    }
+
     const [situationRow] = await db
       .insert(situations)
       .values({
@@ -152,6 +169,24 @@ export async function createSituationFromOCR(
       return err(
         "Lot non signé : émettre un CP nécessite un marché signé.",
         "lot_not_signed",
+      );
+    }
+
+    // Preflight : situation existe déjà ? On retourne une erreur structurée
+    // pour que l'UI propose à l'utilisateur de la mettre à jour plutôt que
+    // de bloquer sur une violation d'unique index Postgres.
+    const conflict = await db.query.situations.findFirst({
+      where: and(
+        eq(situations.lotId, input.lotId),
+        eq(situations.periodeMois, input.periodeMois),
+        eq(situations.periodeAnnee, input.periodeAnnee),
+      ),
+      columns: { id: true },
+    });
+    if (conflict) {
+      return err(
+        `Une situation existe déjà pour ce lot en ${String(input.periodeMois).padStart(2, "0")}/${input.periodeAnnee}. Tu peux la mettre à jour avec ces nouvelles valeurs ou choisir une autre période.`,
+        "situation_exists",
       );
     }
 

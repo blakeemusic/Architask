@@ -62,9 +62,43 @@ export async function withAction<TInput, TOutput>(
     return await runHandler(input, { user });
   } catch (e) {
     console.error("[server action] unexpected error", e);
-    return err(
-      e instanceof Error ? e.message : "Erreur serveur inattendue.",
-      "server_error",
-    );
+    return err(buildSafeErrorMessage(e), "server_error");
   }
+}
+
+/**
+ * Transforme une erreur arbitraire (souvent Postgres/Neon) en un message
+ * utilisable côté UI sans fuiter de SQL brut, paramètres, ni stack trace.
+ *
+ * - En dev : on garde le message technique pour debug.
+ * - En prod : message générique + classification par code Postgres
+ *   (23505 unique violation, 23503 FK violation, etc.).
+ */
+function buildSafeErrorMessage(e: unknown): string {
+  if (!(e instanceof Error)) return "Erreur serveur inattendue.";
+
+  // Heuristique : si le message Drizzle/Neon commence par "Failed query:"
+  // ou contient "duplicate key value violates unique constraint", on
+  // affiche un message lisible.
+  const raw = e.message;
+  const cause = (e as { cause?: { code?: string; constraint_name?: string } }).cause;
+  const pgCode = cause?.code;
+
+  if (pgCode === "23505" || /duplicate key value/.test(raw)) {
+    return "Cet élément existe déjà. Vérifie qu'il n'y a pas de doublon.";
+  }
+  if (pgCode === "23503") {
+    return "Référence invalide : l'élément lié n'existe pas (ou plus).";
+  }
+  if (pgCode === "23514") {
+    return "Une contrainte métier a été violée (ex. montant négatif, % hors range).";
+  }
+  if (/Failed query/.test(raw) || pgCode) {
+    // Ne JAMAIS exposer la requête SQL brute en UI.
+    if (process.env.NODE_ENV === "development") {
+      return `Erreur DB (dev) : ${raw.slice(0, 200)}`;
+    }
+    return "Erreur technique. Contacte le support.";
+  }
+  return raw;
 }
