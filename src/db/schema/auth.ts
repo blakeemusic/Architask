@@ -48,7 +48,13 @@ export const organizations = pgTable(
   "organizations",
   {
     id: pk(),
-    clerkOrgId: text("clerk_org_id").notNull(),
+    /**
+     * ID de l'organisation Clerk associée. Nullable : si Clerk Organizations
+     * n'est pas activé dans le dashboard de l'agence, on fonctionne en mode
+     * "personal org" (1 org Architask par user, sans org Clerk côté Clerk).
+     * Migration vers Clerk Orgs possible plus tard sans casser les données.
+     */
+    clerkOrgId: text("clerk_org_id"),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     // Logo agence (référence vers files.id) — FK ajoutée plus tard pour éviter le cycle.
@@ -61,7 +67,9 @@ export const organizations = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("organizations_clerk_org_id_unique").on(table.clerkOrgId),
+    uniqueIndex("organizations_clerk_org_id_unique")
+      .on(table.clerkOrgId)
+      .where(sql`${table.clerkOrgId} IS NOT NULL`),
     uniqueIndex("organizations_slug_unique").on(table.slug),
   ],
 );

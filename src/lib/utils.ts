@@ -10,13 +10,20 @@ export function cn(...inputs: ClassValue[]) {
  * Initiales d'un nom d'entité (entreprise, MOA, personne).
  * Ponctuation et caractères spéciaux ignorés.
  *
+ * Règles :
+ *   - 1 mot   → 2 premières lettres ("Vitrol" → "VI")
+ *   - 2 mots  → 1ère lettre de chaque ("Plak Group" → "PG")
+ *   - 3+ mots → 1ère lettre du PREMIER + du DERNIER mot, afin de gérer les
+ *               cas type "M. & Mme Robineau" → "MR" (le `&` filtré).
+ *
  * Exemples :
- *   "SAS Beton+"        → "SB"
- *   "Toits & Co"        → "TC"
- *   "Volt & Co"         → "VC"
- *   "Villa Robineau"    → "VR"
- *   "Atelier Habria"    → "AH"
- *   "Vitrol"            → "VI"  (un seul mot → 2 premières lettres)
+ *   "SAS Beton+"          → "SB"
+ *   "Toits & Co"          → "TC"
+ *   "Plak Group"          → "PG"
+ *   "M. & Mme Robineau"   → "MR"
+ *   "Villa Robineau"      → "VR"
+ *   "Atelier Habria"      → "AH"
+ *   "Vitrol"              → "VI"
  */
 export function getInitials(name: string, max = 2): string {
   if (!name) return "?";
@@ -24,6 +31,9 @@ export function getInitials(name: string, max = 2): string {
   const words = cleaned.split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0].slice(0, max).toUpperCase();
+  if (words.length >= 3 && max === 2) {
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  }
   return words
     .slice(0, max)
     .map((w) => w[0])

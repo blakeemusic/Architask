@@ -8,6 +8,27 @@
       "when": 1779199913491,
       "tag": "0000_cold_valeria_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779201752507,
+      "tag": "0001_confused_brother_voodoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779202583158,
+      "tag": "0002_closed_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779202877460,
+      "tag": "0003_giant_wallflower",
+      "breakpoints": true
     }
   ]
 }

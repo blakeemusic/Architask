@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { ClerkLoaded, ClerkLoading, UserButton, useAuth } from "@clerk/nextjs";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -126,7 +128,10 @@ export default function DesignSystemPage() {
               Sprint 1
             </StatusPill>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <AuthHeaderCluster />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -843,5 +848,62 @@ function CalcRow({
         {value}
       </span>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------
+// Auth header cluster — bouton conditionnel "Annuaire" / "Se connecter"
+// ---------------------------------------------------------------
+function AuthHeaderCluster() {
+  return (
+    <>
+      <ClerkLoading>
+        <div
+          className="w-24 h-9 rounded-2xl animate-pulse"
+          style={{ background: "var(--surface-2)" }}
+        />
+      </ClerkLoading>
+      <ClerkLoaded>
+        <AuthHeaderClusterContent />
+      </ClerkLoaded>
+    </>
+  );
+}
+
+function AuthHeaderClusterContent() {
+  const { isSignedIn } = useAuth();
+  if (isSignedIn) {
+    return (
+      <>
+        <Link
+          href="/annuaire"
+          className="btn-dark"
+          style={{ textDecoration: "none" }}
+        >
+          Aller à l&apos;annuaire
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            aria-hidden="true"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </Link>
+        <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
+      </>
+    );
+  }
+  return (
+    <Link
+      href="/sign-in"
+      className="btn-light"
+      style={{ textDecoration: "none" }}
+    >
+      Se connecter
+    </Link>
   );
 }

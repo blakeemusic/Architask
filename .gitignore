@@ -42,3 +42,7 @@ next-env.d.ts
 
 # local env files
 .env*
+
+# stockage local des uploads (PDF attestations, plans, photos…) — privé,
+# servi via /api/files/[id] avec check organizationId. Sera migré vers R2.
+/.uploads/

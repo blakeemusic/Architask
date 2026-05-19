@@ -6,13 +6,14 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
 import { organizations } from "./auth";
 import { files } from "./files";
-import { money, pk, timestamps } from "./_shared";
+import { moneyOptional, pk, timestamps } from "./_shared";
 
 // ============================================================
 // Enums
@@ -78,6 +79,10 @@ export const companies = pgTable(
     }),
     /** Seed pour le gradient stable du CompanyLogo (SIRET ou raison_sociale). */
     paletteSeed: text("palette_seed").notNull(),
+    /** Soft delete : archived_at non-null = company archivée, masquée par
+        défaut dans les lists. Hard delete possible uniquement si aucune FK
+        entrante (cf. server action deleteCompany). */
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     ...timestamps(),
   },
   (table) => [
@@ -86,6 +91,7 @@ export const companies = pgTable(
       .on(table.organizationId, table.siret)
       .where(sql`${table.siret} IS NOT NULL`),
     index("companies_raison_sociale_idx").on(table.raisonSociale),
+    index("companies_archived_idx").on(table.organizationId, table.archivedAt),
   ],
 );
 
@@ -123,7 +129,8 @@ export const insurances = pgTable(
     type: insuranceTypeEnum("type").notNull(),
     compagnie: text("compagnie").notNull(),
     numPolice: text("num_police").notNull(),
-    montantGaranti: money("montant_garanti"),
+    /** Montant garanti — nullable car pas toujours connu à la saisie. */
+    montantGaranti: moneyOptional("montant_garanti"),
     dateDebut: date("date_debut", { mode: "date" }).notNull(),
     dateFin: date("date_fin", { mode: "date" }).notNull(),
     /** Activités couvertes (taxonomie type Qualibat, libre en MVP). */
@@ -145,7 +152,7 @@ export const insurances = pgTable(
     check("insurances_date_range_ck", sql`${table.dateFin} > ${table.dateDebut}`),
     check(
       "insurances_montant_positive_ck",
-      sql`${table.montantGaranti} >= 0`,
+      sql`${table.montantGaranti} IS NULL OR ${table.montantGaranti} >= 0`,
     ),
   ],
 );
@@ -169,11 +176,14 @@ export const moas = pgTable(
     codePostal: text("code_postal"),
     ville: text("ville"),
     pays: text("pays").default("France"),
+    /** Soft delete — symétrique à companies. */
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     ...timestamps(),
   },
   (table) => [
     index("moas_organization_id_idx").on(table.organizationId),
     index("moas_raison_sociale_idx").on(table.raisonSociale),
+    index("moas_archived_idx").on(table.organizationId, table.archivedAt),
   ],
 );
 
