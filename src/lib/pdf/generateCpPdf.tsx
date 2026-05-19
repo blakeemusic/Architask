@@ -57,6 +57,11 @@ export type GenerateCpPdfInput = {
 };
 
 export async function generateCpPdf(input: GenerateCpPdfInput): Promise<Buffer> {
+  console.info("[PDF] generateCpPdf start", {
+    numero: input.cp.numero,
+    netTtc: input.cp.netTtc,
+  });
+
   const montantHt = (
     Number(input.cp.brutAPayerHt) -
     Number(input.cp.retenueGarantie) +
@@ -109,16 +114,16 @@ export async function generateCpPdf(input: GenerateCpPdfInput): Promise<Buffer> 
     signedByName: input.signedByName,
   };
 
-  // Debug : log les montants clés (string brut ET version formatée pour
-  // PDF) pour vérifier ce qui sort dans la chaîne de formatage. À retirer
-  // quand le bug formatage est définitivement validé.
+  // Debug : log les montants formatés juste avant le render PDF pour
+  // pouvoir confirmer que la chaîne sortie de formatMoneyForPdf est bien
+  // en ASCII pur (espaces U+0020 normaux).
   const { formatMoneyForPdf } = await import("@/lib/format");
-  console.info("[PDF] generateCpPdf", {
+  const formattedNetTtc = formatMoneyForPdf(data.netTtc);
+  console.info("[PDF] generateCpPdf render", {
     numero: data.numero,
-    rawBrut: data.brutAPayerHt,
-    formattedBrut: formatMoneyForPdf(data.brutAPayerHt),
     rawNetTtc: data.netTtc,
-    formattedNetTtc: formatMoneyForPdf(data.netTtc),
+    formattedNetTtc,
+    hexCheck: Buffer.from(formattedNetTtc).toString("hex"),
   });
 
   return await renderToBuffer(<CpDocument data={data} />);

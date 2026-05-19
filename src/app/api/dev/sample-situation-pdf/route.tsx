@@ -2,7 +2,6 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import {
   Document,
-  Font,
   Page,
   StyleSheet,
   Text,
@@ -17,21 +16,6 @@ import { env } from "@/lib/env";
 import { getCurrentUser, UnauthenticatedError } from "@/lib/auth";
 import { formatMoneyForPdf } from "@/lib/format";
 
-// Police Inter pour rendre correctement les espaces Unicode FR.
-Font.register({
-  family: "Inter",
-  fonts: [
-    {
-      src: "https://rsms.me/inter/font-files/Inter-Regular.woff?v=3.19",
-      fontWeight: 400,
-    },
-    {
-      src: "https://rsms.me/inter/font-files/Inter-Bold.woff?v=3.19",
-      fontWeight: 700,
-    },
-  ],
-});
-
 /**
  * Endpoint DEV uniquement : génère un PDF de situation type pour pouvoir
  * tester l'extraction OCR Claude Vision sans avoir un vrai PDF d'entreprise
@@ -43,7 +27,7 @@ Font.register({
  */
 
 const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 10, fontFamily: "Inter" },
+  page: { padding: 32, fontSize: 10, fontFamily: "Helvetica" },
   header: { marginBottom: 18 },
   h1: { fontSize: 16, fontWeight: 700, marginBottom: 4 },
   meta: { fontSize: 9, color: "#5F6675" },

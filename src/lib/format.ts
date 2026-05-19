@@ -111,9 +111,22 @@ export function formatMoneyForPdf(
   const n = toNumber(value);
   if (n === null) return "—";
   const decimals = options.decimals ?? 2;
-  const formatter = decimals === 0 ? FR_NUMBER : FR_NUMBER_2;
-  const formatted = formatter.format(n).replace(NBSP_REGEX, " ");
-  return options.withCurrency ? `${formatted} €` : formatted;
+
+  // Formatage 100 % manuel — aucun appel à Intl.NumberFormat (qui insère
+  // des caractères Unicode invisibles non rendus par Helvetica).
+  // Caractères utilisés : chiffres ASCII, virgule décimale, espace ASCII
+  // U+0020 comme séparateur de milliers. Garanti compatible PDF.
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  const fixed = abs.toFixed(decimals);
+  const [intPart, decPart] = fixed.split(".");
+  const intWithSpaces = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const formatted = decimals === 0
+    ? intWithSpaces
+    : `${intWithSpaces},${decPart}`;
+  return options.withCurrency
+    ? `${sign}${formatted} €`
+    : `${sign}${formatted}`;
 }
 
 export function formatPct(value: number | null | undefined): string {

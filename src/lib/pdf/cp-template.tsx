@@ -1,6 +1,5 @@
 import {
   Document,
-  Font,
   Page,
   Text,
   View,
@@ -15,29 +14,11 @@ import { formatMoneyForPdf } from "@/lib/format";
  * Mentions légales NF P03-001 obligatoires dans le footer. Le bloc signature
  * est rendu uniquement si signedAt est fourni (statut "signé" en MVP).
  *
- * Police : Inter enregistrée via Font.register, en remplacement d'Helvetica
- * par défaut. Inter rend correctement tous les caractères Unicode FR (en
- * particulier U+202F narrow no-break space) — garantie supplémentaire en
- * complément du strip déjà fait dans formatMoneyForPdf.
+ * Police : Helvetica par défaut. Tentative précédente d'enregistrer Inter
+ * via Font.register depuis rsms.me a causé un HTTP 500 (la WOFF n'est pas
+ * fiable côté serveur Node). On reste sur Helvetica + formatMoneyForPdf
+ * qui formate à la main sans U+202F.
  */
-
-Font.register({
-  family: "Inter",
-  fonts: [
-    {
-      src: "https://rsms.me/inter/font-files/Inter-Regular.woff?v=3.19",
-      fontWeight: 400,
-    },
-    {
-      src: "https://rsms.me/inter/font-files/Inter-SemiBold.woff?v=3.19",
-      fontWeight: 600,
-    },
-    {
-      src: "https://rsms.me/inter/font-files/Inter-Bold.woff?v=3.19",
-      fontWeight: 700,
-    },
-  ],
-});
 
 const COLORS = {
   primary: "#0B0B0F",
@@ -57,7 +38,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     fontSize: 10,
     color: COLORS.primary,
-    fontFamily: "Inter",
+    fontFamily: "Helvetica",
   },
   header: {
     flexDirection: "row",
