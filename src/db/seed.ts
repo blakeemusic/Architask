@@ -44,6 +44,13 @@ import {
 } from "./schema/operations";
 import { certificatsPaiement } from "./schema/finance";
 import { computeCP } from "../lib/finance/computeCP";
+import { computeDGD } from "../lib/finance/computeDGD";
+import {
+  cautions,
+  dgds,
+  pvReceptions,
+  retentions,
+} from "./schema/operations";
 
 // ---------------------------------------------------------------
 // Helpers
@@ -895,6 +902,401 @@ async function seed() {
   }
   console.log(`✓ Situations: ${situationCount} créées`);
   console.log(`✓ CPs: ${cpCount} créés (statuts mixés)`);
+
+  // 7. Retentions + cautions seedées sur Résidence Les Cèdres
+  //    Note : en vrai, une retention est créée à la SIGNATURE du PV, pas
+  //    dès qu'un lot est à 100%. On triche ici pour le seed (RC n'a pas de
+  //    PV signé mais on veut avoir des retentions visibles pour test UI).
+  const rcOp = await db.query.operations.findFirst({
+    where: and(eq(operations.organizationId, org.id), eq(operations.code, "RC")),
+    with: { lots: { with: { company: true } } },
+  });
+  let retentionCount = 0;
+  let cautionCount = 0;
+  if (rcOp) {
+    const rcLot01 = rcOp.lots.find((l) => l.numero === "01");
+    const rcLot02 = rcOp.lots.find((l) => l.numero === "02");
+    const rcLot03 = rcOp.lots.find((l) => l.numero === "03");
+    // Retentions artificielles pour test UI (PV pas encore signé en vrai).
+    for (const lot of [rcLot02, rcLot03]) {
+      if (!lot) continue;
+      const existing = await db.query.retentions.findFirst({
+        where: eq(retentions.lotId, lot.id),
+      });
+      if (existing) continue;
+      const dateRecept = new Date();
+      dateRecept.setMonth(dateRecept.getMonth() - 1);
+      const echeance = new Date(dateRecept);
+      echeance.setFullYear(echeance.getFullYear() + 1);
+      const montantRetenu = (Number(lot.montantMarcheHt) * 0.05).toFixed(2);
+      await db.insert(retentions).values({
+        lotId: lot.id,
+        montantRetenu,
+        dateReceptionLot: dateRecept,
+        echeanceLiberation: echeance,
+        statut: "en_cours",
+      });
+      retentionCount += 1;
+    }
+    // 2 cautions actives sur RC Lot 03 et Lot 01 (différents lots).
+    for (const lot of [rcLot01, rcLot03]) {
+      if (!lot) continue;
+      const existing = await db.query.cautions.findFirst({
+        where: eq(cautions.lotId, lot.id),
+      });
+      if (existing) continue;
+      const dateEm = new Date();
+      dateEm.setMonth(dateEm.getMonth() - 6);
+      const dateExp = new Date(dateEm);
+      dateExp.setFullYear(dateExp.getFullYear() + 1);
+      await db.insert(cautions).values({
+        lotId: lot.id,
+        montant: (Number(lot.montantMarcheHt) * 0.05).toFixed(2),
+        dateEmission: dateEm,
+        dateExpiration: dateExp,
+        banque: lot.numero === "01" ? "Crédit Mutuel Pro" : "BNP Paribas",
+        numCaution: `RBQS-2026-${String(rcOp.code).padStart(2, "0")}${lot.numero}`,
+        statut: "active",
+      });
+      cautionCount += 1;
+    }
+  }
+  console.log(`✓ Retentions: ${retentionCount} créées (RC, test UI)`);
+  console.log(`✓ Cautions: ${cautionCount} créées (RC)`);
+
+  // 8. Crèche Cousteau — opération clôturée DGD
+  //    7 lots avec CPs payés, PV signé, 7 DGDs signés.
+  const CRECHE_LOTS: Array<{
+    numero: string;
+    libelle: string;
+    companyName: string;
+    montant: string;
+    activites: string[];
+  }> = [
+    { numero: "01", libelle: "Gros œuvre", companyName: "SAS Beton+", montant: "180000", activites: ["gros_oeuvre"] },
+    { numero: "02", libelle: "Charpente", companyName: "SARL Dupont", montant: "92000", activites: ["charpente_bois"] },
+    { numero: "03", libelle: "Couverture", companyName: "Toits & Co", montant: "85000", activites: ["couverture_zinc"] },
+    { numero: "04", libelle: "Menuiseries", companyName: "Vitrol Ouest", montant: "120000", activites: ["menuiseries_exterieures"] },
+    { numero: "05", libelle: "Plomberie/CVC", companyName: "Thermo Pro", montant: "160000", activites: ["plomberie"] },
+    { numero: "06", libelle: "Électricité", companyName: "Volt & Co", montant: "95000", activites: ["electricite_courant_fort"] },
+    { numero: "07", libelle: "Peintures", companyName: "Coloria SARL", montant: "78000", activites: ["peintures_interieures"] },
+  ];
+  const crecheExisting = await db.query.operations.findFirst({
+    where: and(
+      eq(operations.organizationId, org.id),
+      eq(operations.code, "CC"),
+    ),
+  });
+  let crecheOpRow = crecheExisting;
+  if (!crecheOpRow) {
+    const moaCommune = moaByName.get("Mairie de Boulogne-Billancourt");
+    if (!moaCommune) throw new Error("MOA Mairie introuvable pour Crèche.");
+    const dateOs = new Date();
+    dateOs.setFullYear(dateOs.getFullYear() - 2);
+    const dateRecept = new Date();
+    dateRecept.setMonth(dateRecept.getMonth() - 2);
+    [crecheOpRow] = await db
+      .insert(operations)
+      .values({
+        organizationId: org.id,
+        code: "CC",
+        name: "Crèche Cousteau",
+        moaId: moaCommune.id,
+        ville: "Boulogne-Billancourt",
+        codePostal: "92100",
+        dateOs,
+        dateReceptionCible: dateRecept,
+        dureePrevueJours: 700,
+        montantPrevisionnelHt: "810000",
+        statut: "dgd",
+      })
+      .returning();
+  }
+  if (!crecheOpRow) throw new Error("Crèche Cousteau op introuvable");
+
+  // Lots + CPs payés + DGDs signés + PV + retentions
+  let crecheLotCount = 0;
+  let crecheDgdCount = 0;
+  for (const cl of CRECHE_LOTS) {
+    const existingLot = await db.query.lots.findFirst({
+      where: and(
+        eq(lots.operationId, crecheOpRow.id),
+        eq(lots.numero, cl.numero),
+      ),
+    });
+    let lotRow = existingLot;
+    if (!lotRow) {
+      const company = companyByName.get(cl.companyName);
+      if (!company) continue;
+      [lotRow] = await db
+        .insert(lots)
+        .values({
+          operationId: crecheOpRow.id,
+          numero: cl.numero,
+          libelle: cl.libelle,
+          companyId: company.id,
+          montantMarcheHt: cl.montant,
+          tauxTva: "20.00",
+          modeRevision: "BT01",
+          retenueGarantiePct: "5.00",
+          delaiPaiementJours: 30,
+          activitesAttendues: cl.activites,
+          statut: "solde",
+          decennaleCheckAt: new Date(),
+        })
+        .returning();
+      crecheLotCount += 1;
+    }
+    if (!lotRow) continue;
+
+    // CP payé à 100% (1 seul CP par lot pour simplicité Crèche).
+    const cpNumero = `CP-CC-${cl.numero}-001`;
+    const existingCp = await db.query.certificatsPaiement.findFirst({
+      where: eq(certificatsPaiement.numero, cpNumero),
+    });
+    if (!existingCp) {
+      const cpResult = computeCP({
+        lot: {
+          montantMarcheHt: cl.montant,
+          retenueGarantiePct: "5.00",
+          tauxTva: "20.00",
+          avenantsSignes: [],
+        },
+        situation: { mode: "global", pctGlobal: "100" },
+        previousCPs: [],
+      });
+      if (cpResult.ok) {
+        const m = cpResult.data;
+        const dateEmission = new Date();
+        dateEmission.setMonth(dateEmission.getMonth() - 4);
+        await db.insert(certificatsPaiement).values({
+          operationId: crecheOpRow.id,
+          lotId: lotRow.id,
+          numero: cpNumero,
+          periodeMois: dateEmission.getMonth() + 1,
+          periodeAnnee: dateEmission.getFullYear(),
+          cumulTravauxHt: m.cumulTravauxHt,
+          cumulCpPrecedentsHt: m.cumulCpPrecedentsHt,
+          brutAPayerHt: m.brutAPayerHt,
+          retenueGarantie: m.retenueGarantie,
+          revisionMontantHt: m.revisionMontantHt,
+          tva: m.tva,
+          netTtc: m.netTtc,
+          statut: "paye",
+          sentAt: new Date(dateEmission.getTime() + 2 * 24 * 60 * 60 * 1000),
+          paidAt: new Date(dateEmission.getTime() + 25 * 24 * 60 * 60 * 1000),
+          signedAt: new Date(dateEmission.getTime() + 1 * 24 * 60 * 60 * 1000),
+          createdBy: ownerUserId,
+          signedByUserId: ownerUserId,
+        });
+      }
+    }
+
+    // DGD signé
+    const existingDgd = await db.query.dgds.findFirst({
+      where: eq(dgds.lotId, lotRow.id),
+    });
+    if (!existingDgd) {
+      const dgdResult = computeDGD({
+        lot: {
+          montantMarcheHt: cl.montant,
+          tauxTva: "20.00",
+          avenantsSignes: [],
+        },
+        cps: [
+          { brutAPayerHt: (Number(cl.montant) * 0.95).toFixed(2), statut: "paye" },
+        ],
+      });
+      if (dgdResult.ok) {
+        const d = dgdResult.data;
+        const signedAt = new Date();
+        signedAt.setMonth(signedAt.getMonth() - 1);
+        await db.insert(dgds).values({
+          lotId: lotRow.id,
+          marcheReviseHt: d.marcheReviseHt,
+          travauxSupplAcceptesHt: d.travauxSupplAcceptesHt,
+          penalitesHt: d.penalitesHt,
+          cumulCpVersesHt: d.cumulCpVersesHt,
+          soldeHt: d.soldeHt,
+          soldeTtc: d.soldeTtc,
+          statut: "signe",
+          signedAt,
+          signedByUserId: ownerUserId,
+          computedAt: signedAt,
+        });
+        crecheDgdCount += 1;
+      }
+    }
+  }
+
+  // PV de réception signé sur Crèche
+  const existingPv = await db.query.pvReceptions.findFirst({
+    where: eq(pvReceptions.operationId, crecheOpRow.id),
+  });
+  if (!existingPv) {
+    const dateRecept = new Date();
+    dateRecept.setMonth(dateRecept.getMonth() - 2);
+    await db.insert(pvReceptions).values({
+      operationId: crecheOpRow.id,
+      dateReception: dateRecept,
+      avecReserves: "non",
+      signedAt: dateRecept,
+      signedByUserId: ownerUserId,
+    });
+  }
+
+  // Retentions sur Crèche (toutes les lots solde)
+  const crecheLots = await db.query.lots.findMany({
+    where: eq(lots.operationId, crecheOpRow.id),
+  });
+  let crecheRetentionCount = 0;
+  for (const lot of crecheLots) {
+    const existing = await db.query.retentions.findFirst({
+      where: eq(retentions.lotId, lot.id),
+    });
+    if (existing) continue;
+    const dateRecept = new Date();
+    dateRecept.setMonth(dateRecept.getMonth() - 2);
+    const echeance = new Date(dateRecept);
+    echeance.setFullYear(echeance.getFullYear() + 1);
+    await db.insert(retentions).values({
+      lotId: lot.id,
+      montantRetenu: (Number(lot.montantMarcheHt) * 0.05).toFixed(2),
+      dateReceptionLot: dateRecept,
+      echeanceLiberation: echeance,
+      statut: "en_cours",
+    });
+    crecheRetentionCount += 1;
+  }
+
+  // 1 caution en remplacement sur Crèche Lot 01 (gros œuvre)
+  const crecheLot01 = crecheLots.find((l) => l.numero === "01");
+  if (crecheLot01) {
+    const existing = await db.query.cautions.findFirst({
+      where: eq(cautions.lotId, crecheLot01.id),
+    });
+    if (!existing) {
+      const dateEm = new Date();
+      dateEm.setMonth(dateEm.getMonth() - 2);
+      const dateExp = new Date(dateEm);
+      dateExp.setFullYear(dateExp.getFullYear() + 1);
+      const [newCaution] = await db
+        .insert(cautions)
+        .values({
+          lotId: crecheLot01.id,
+          montant: (Number(crecheLot01.montantMarcheHt) * 0.05).toFixed(2),
+          dateEmission: dateEm,
+          dateExpiration: dateExp,
+          banque: "Crédit Agricole Île-de-France",
+          numCaution: "RBQS-CC-01-001",
+          statut: "active",
+        })
+        .returning();
+      // Lie cette caution à la retention de Lot 01.
+      const retLot01 = await db.query.retentions.findFirst({
+        where: eq(retentions.lotId, crecheLot01.id),
+      });
+      if (retLot01) {
+        await db
+          .update(retentions)
+          .set({ substitutedByCautionId: newCaution.id })
+          .where(eq(retentions.id, retLot01.id));
+      }
+    }
+  }
+  console.log(
+    `✓ Crèche Cousteau: ${crecheLotCount} lots, ${crecheDgdCount} DGDs signés, ${crecheRetentionCount} retentions`,
+  );
+
+  // 9. Logements Verdier — opération clôturée avec retention libérée
+  //    Pour qu'on ait l'historique d'une op réception > 1 an, retenue libérée.
+  const verdierExisting = await db.query.operations.findFirst({
+    where: and(
+      eq(operations.organizationId, org.id),
+      eq(operations.code, "LV"),
+    ),
+  });
+  let verdierOp = verdierExisting;
+  if (!verdierOp) {
+    const moaCommune = moaByName.get("Mairie de Boulogne-Billancourt");
+    if (!moaCommune) throw new Error("MOA Mairie introuvable pour Verdier.");
+    const dateOs = new Date();
+    dateOs.setFullYear(dateOs.getFullYear() - 3);
+    const dateRecept = new Date();
+    dateRecept.setFullYear(dateRecept.getFullYear() - 1);
+    dateRecept.setMonth(dateRecept.getMonth() - 2);
+    [verdierOp] = await db
+      .insert(operations)
+      .values({
+        organizationId: org.id,
+        code: "LV",
+        name: "Logements Verdier",
+        moaId: moaCommune.id,
+        ville: "Suresnes",
+        codePostal: "92150",
+        dateOs,
+        dateReceptionCible: dateRecept,
+        dureePrevueJours: 540,
+        montantPrevisionnelHt: "640000",
+        statut: "clos",
+      })
+      .returning();
+  }
+  if (!verdierOp) throw new Error("Logements Verdier op introuvable");
+
+  // 1 lot stub + 1 retention libérée
+  const verdierLotExisting = await db.query.lots.findFirst({
+    where: and(
+      eq(lots.operationId, verdierOp.id),
+      eq(lots.numero, "01"),
+    ),
+  });
+  let verdierLot = verdierLotExisting;
+  if (!verdierLot) {
+    const company = companyByName.get("SAS Beton+");
+    if (company) {
+      [verdierLot] = await db
+        .insert(lots)
+        .values({
+          operationId: verdierOp.id,
+          numero: "01",
+          libelle: "Gros œuvre",
+          companyId: company.id,
+          montantMarcheHt: "640000",
+          tauxTva: "20.00",
+          modeRevision: "BT01",
+          retenueGarantiePct: "5.00",
+          delaiPaiementJours: 30,
+          activitesAttendues: ["gros_oeuvre"],
+          statut: "solde",
+          decennaleCheckAt: new Date(),
+        })
+        .returning();
+    }
+  }
+  if (verdierLot) {
+    const existingRet = await db.query.retentions.findFirst({
+      where: eq(retentions.lotId, verdierLot.id),
+    });
+    if (!existingRet) {
+      const dateRecept = new Date();
+      dateRecept.setFullYear(dateRecept.getFullYear() - 1);
+      dateRecept.setMonth(dateRecept.getMonth() - 2);
+      const echeance = new Date(dateRecept);
+      echeance.setFullYear(echeance.getFullYear() + 1);
+      const liberation = new Date(echeance);
+      liberation.setDate(liberation.getDate() + 5);
+      await db.insert(retentions).values({
+        lotId: verdierLot.id,
+        montantRetenu: "32000.00",
+        dateReceptionLot: dateRecept,
+        echeanceLiberation: echeance,
+        dateLiberationReelle: liberation,
+        statut: "liberee",
+      });
+    }
+  }
+  console.log("✓ Logements Verdier: 1 op clôturée + retention libérée");
 
   console.log("✅ Seed terminé !");
 }

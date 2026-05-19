@@ -43,6 +43,13 @@
       "when": 1779210730470,
       "tag": "0005_dusty_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779224111456,
+      "tag": "0006_familiar_piledriver",
+      "breakpoints": true
     }
   ]
 }

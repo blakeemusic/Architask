@@ -441,6 +441,11 @@ export const pvReceptions = pgTable(
     signedFileId: uuid("signed_file_id").references(() => files.id, {
       onDelete: "set null",
     }),
+    /** Snapshot signature (mock MVP — comme CP). */
+    signedAt: timestamp("signed_at", { withTimezone: true, mode: "date" }),
+    signedByUserId: uuid("signed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     ...timestamps(),
   },
   (table) => [
@@ -467,6 +472,11 @@ export const dgds = pgTable(
     soldeTtc: money("solde_ttc"),
     statut: dgdStatusEnum("statut").notNull().default("brouillon"),
     signedFileId: uuid("signed_file_id").references(() => files.id, {
+      onDelete: "set null",
+    }),
+    /** Snapshot signature (mock MVP — comme CP / PV). */
+    signedAt: timestamp("signed_at", { withTimezone: true, mode: "date" }),
+    signedByUserId: uuid("signed_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
     computedAt: timestamp("computed_at", {
@@ -534,6 +544,15 @@ export const retentions = pgTable(
     echeanceLiberation: date("echeance_liberation", { mode: "date" }).notNull(),
     dateLiberationReelle: date("date_liberation_reelle", { mode: "date" }),
     statut: retentionStatusEnum("statut").notNull().default("en_cours"),
+    /**
+     * Caution bancaire qui a remplacé cette retenue garantie (RBQS).
+     * Pas de modif de l'enum retention_status — on dérive le 3e état
+     * (remplacée par caution) en lecture quand cette colonne est non-null.
+     */
+    substitutedByCautionId: uuid("substituted_by_caution_id").references(
+      () => cautions.id,
+      { onDelete: "set null" },
+    ),
     ...timestamps(),
   },
   (table) => [
@@ -677,12 +696,20 @@ export const pvReceptionsRelations = relations(pvReceptions, ({ one }) => ({
     fields: [pvReceptions.operationId],
     references: [operations.id],
   }),
+  signedByUser: one(users, {
+    fields: [pvReceptions.signedByUserId],
+    references: [users.id],
+  }),
 }));
 
 export const dgdsRelations = relations(dgds, ({ one }) => ({
   lot: one(lots, {
     fields: [dgds.lotId],
     references: [lots.id],
+  }),
+  signedByUser: one(users, {
+    fields: [dgds.signedByUserId],
+    references: [users.id],
   }),
 }));
 
@@ -697,5 +724,9 @@ export const retentionsRelations = relations(retentions, ({ one }) => ({
   lot: one(lots, {
     fields: [retentions.lotId],
     references: [lots.id],
+  }),
+  substitutedByCaution: one(cautions, {
+    fields: [retentions.substitutedByCautionId],
+    references: [cautions.id],
   }),
 }));

@@ -95,11 +95,25 @@ export function OperationRecapClient({
   operation,
   cps,
   companies,
+  pv,
+  reserves,
+  dgdByLot,
 }: {
   operation: OperationDetail;
   cps: CpRowLite[];
   companies: CompanyListItem[];
+  pv: {
+    id: string;
+    dateReception: Date;
+    avecReserves: string;
+    signedAt: Date | null;
+  } | null;
+  reserves: Array<{ id: string; statut: "a_lever" | "en_cours" | "levee" }>;
+  dgdByLot: ReadonlyArray<[string, "brouillon" | "a_valider" | "signe"]>;
 }) {
+  const dgdMap = new Map(dgdByLot);
+  const reservesLevees = reserves.filter((r) => r.statut === "levee").length;
+  const reservesTotal = reserves.length;
   const [today] = React.useState(() => new Date());
   const [lotDrawerOpen, setLotDrawerOpen] = React.useState(false);
   const [lotTab, setLotTab] = React.useState<"lots" | "companies">("lots");
@@ -208,6 +222,56 @@ export function OperationRecapClient({
 
       <OperationTabs operationId={operation.id} active="recap" />
 
+      {/* Bandeau réception si PV présent */}
+      {pv && (
+        <Link
+          href={`/operations/${operation.id}/reception`}
+          style={{ textDecoration: "none" }}
+        >
+          <Card
+            variant="white"
+            padding="md"
+            className="mb-6 flex items-center gap-4 transition-colors hover:bg-[var(--surface-2)]"
+            style={{ borderLeft: "4px solid var(--success)" }}
+          >
+            <div
+              className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
+              style={{
+                background: "rgba(22,163,74,0.10)",
+                color: "var(--success)",
+              }}
+            >
+              ✓
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-[14px]">
+                Réception le {formatDateFr(pv.dateReception)}
+                {pv.signedAt ? " · PV signé" : " · PV brouillon"}
+              </div>
+              {reservesTotal > 0 ? (
+                <div
+                  className="text-[12px] mt-0.5"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {reservesLevees} réserve{reservesLevees !== 1 ? "s" : ""}{" "}
+                  levée{reservesLevees !== 1 ? "s" : ""} sur {reservesTotal}
+                </div>
+              ) : (
+                <div
+                  className="text-[12px] mt-0.5"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Sans réserve
+                </div>
+              )}
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-tertiary)" }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </Card>
+        </Link>
+      )}
+
       {/* Header */}
       <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
         <div>
@@ -239,31 +303,39 @@ export function OperationRecapClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="light"
-            onClick={() => toast.info("Bientôt — export récap PDF")}
-            leftIcon={
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
-            }
+          <a
+            href={`/api/operations/${operation.id}/recap-pdf?download=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: "none" }}
           >
-            Export récap
-          </Button>
-          <Button
-            onClick={() =>
-              toast.info("Bientôt — sprint CP (création de certificat de paiement)")
-            }
-            leftIcon={
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            }
+            <Button
+              variant="light"
+              leftIcon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+              }
+            >
+              Export récap
+            </Button>
+          </a>
+          <Link
+            href={`/operations/${operation.id}/cps`}
+            style={{ textDecoration: "none" }}
           >
-            Émettre un CP
-          </Button>
+            <Button
+              leftIcon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              }
+            >
+              Émettre un CP
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -332,22 +404,28 @@ export function OperationRecapClient({
               : "Projection à définir"
           }
         />
-        <HeroKpiCard
-          tone="lilac"
-          eyebrow="Retenue garantie"
-          value={retenue}
-          footer={
-            operation.dateReceptionCible
-              ? `À libérer ${formatDateFr(
-                  new Date(
-                    new Date(operation.dateReceptionCible).setFullYear(
-                      operation.dateReceptionCible.getFullYear() + 1,
+        <Link
+          href={`/operations/${operation.id}/cautions`}
+          style={{ textDecoration: "none" }}
+          className="block"
+        >
+          <HeroKpiCard
+            tone="lilac"
+            eyebrow="Retenue garantie"
+            value={retenue}
+            footer={
+              operation.dateReceptionCible
+                ? `À libérer ${formatDateFr(
+                    new Date(
+                      new Date(operation.dateReceptionCible).setFullYear(
+                        operation.dateReceptionCible.getFullYear() + 1,
+                      ),
                     ),
-                  ),
-                )}`
-              : "À calculer à la réception"
-          }
-        />
+                  )} · Voir cautions →`
+                : "Voir cautions →"
+            }
+          />
+        </Link>
       </div>
 
       {/* Progress bar timeline */}
@@ -438,6 +516,9 @@ export function OperationRecapClient({
                       </th>
                       <th className="text-left py-2 px-4 text-[11px] uppercase tracking-wider font-semibold">
                         Statut
+                      </th>
+                      <th className="text-left py-2 px-4 text-[11px] uppercase tracking-wider font-semibold">
+                        DGD
                       </th>
                     </tr>
                   </thead>
@@ -538,6 +619,46 @@ export function OperationRecapClient({
                                       ? "Réception"
                                       : "Soldé"}
                             </StatusPill>
+                          </td>
+                          <td className="py-3 px-4">
+                            {(() => {
+                              const dgdStatut = dgdMap.get(lot.id);
+                              if (!dgdStatut) {
+                                return (
+                                  <Link
+                                    href={`/operations/${operation.id}/dgd`}
+                                    style={{ textDecoration: "none" }}
+                                  >
+                                    <StatusPill variant="neutral" size="sm">
+                                      Non établi
+                                    </StatusPill>
+                                  </Link>
+                                );
+                              }
+                              return (
+                                <Link
+                                  href={`/operations/${operation.id}/dgd/${lot.id}`}
+                                  style={{ textDecoration: "none" }}
+                                >
+                                  <StatusPill
+                                    variant={
+                                      dgdStatut === "signe"
+                                        ? "success"
+                                        : dgdStatut === "a_valider"
+                                          ? "warning"
+                                          : "info"
+                                    }
+                                    size="sm"
+                                  >
+                                    {dgdStatut === "signe"
+                                      ? "Signé"
+                                      : dgdStatut === "a_valider"
+                                        ? "À valider"
+                                        : "Brouillon"}
+                                  </StatusPill>
+                                </Link>
+                              );
+                            })()}
                           </td>
                         </tr>
                       );

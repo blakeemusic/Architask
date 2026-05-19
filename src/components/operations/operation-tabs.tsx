@@ -16,7 +16,11 @@ type TabKey =
   | "cr"
   | "honoraires"
   | "dgd"
-  | "documents";
+  | "documents"
+  // Pages hors-tab visibles dans le breadcrumb (réception, cautions).
+  // Acceptées dans la prop `active` mais ne highlightent aucun tab.
+  | "reception"
+  | "cautions";
 
 const TABS: {
   key: TabKey;
@@ -35,7 +39,7 @@ const TABS: {
   { key: "planning", label: "Planning", href: (id) => `/operations/${id}/planning`, disabled: true },
   { key: "cr", label: "CR chantier", href: (id) => `/operations/${id}/cr-chantier`, disabled: true },
   { key: "honoraires", label: "Honoraires", href: (id) => `/operations/${id}/honoraires`, disabled: true, locked: true },
-  { key: "dgd", label: "DGD", href: (id) => `/operations/${id}/dgd`, disabled: true },
+  { key: "dgd", label: "DGD", href: (id) => `/operations/${id}/dgd` },
   { key: "documents", label: "Documents", href: (id) => `/operations/${id}/documents`, disabled: true },
 ];
 

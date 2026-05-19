@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
