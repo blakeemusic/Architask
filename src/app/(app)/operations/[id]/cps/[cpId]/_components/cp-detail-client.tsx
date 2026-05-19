@@ -70,7 +70,21 @@ const STATUT_VARIANT: Record<CpStatut, "neutral" | "warning" | "info" | "brand" 
 export function CpDetailClient({ cp }: { cp: CpData }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
+  const [today] = React.useState(() => new Date());
   const compact = formatMoneyCompact(cp.netTtc);
+
+  // Retard de paiement = nb jours depuis l'envoi à la MOA, si CP "envoyé"
+  // depuis > 30 jours sans confirmation paiement. NF P03-001 : la MOA a
+  // 30 j fin de mois pour payer l'entreprise.
+  const paymentOverdueDays =
+    cp.statut === "envoye" && cp.sentAt
+      ? (() => {
+          const days = Math.floor(
+            (today.getTime() - cp.sentAt.getTime()) / (1000 * 60 * 60 * 24),
+          );
+          return days > 30 ? days : null;
+        })()
+      : null;
 
   const handleValidate = async () => {
     setBusy(true);
@@ -231,17 +245,58 @@ export function CpDetailClient({ cp }: { cp: CpData }) {
                 onClick={handleSend}
                 disabled={busy}
               >
-                Envoyer à l&apos;entreprise
+                Envoyer à la MOA pour paiement
               </Button>
             )}
             {cp.statut === "envoye" && (
-              <Button
-                className="w-full"
-                onClick={handlePaid}
-                disabled={busy}
-              >
-                Marquer comme payé
-              </Button>
+              <>
+                {/* Statut principal final pour le MOE : Envoyé est l'étape
+                    où l'archi a fait son travail. Le suivi du paiement est
+                    secondaire et déclaratif (la MOA paie directement
+                    l'entreprise selon NF P03-001). */}
+                <div
+                  className="p-3 rounded-xl text-center text-[12px]"
+                  style={{
+                    background: "rgba(14,165,233,0.10)",
+                    color: "var(--info)",
+                  }}
+                >
+                  ✓ Envoyé à la MOA le {formatDateFr(cp.sentAt)}
+                </div>
+                {paymentOverdueDays !== null && (
+                  <div
+                    className="p-3 rounded-xl text-[12px]"
+                    style={{
+                      background: "rgba(245,158,11,0.10)",
+                      border: "1px solid var(--warning)",
+                      color: "var(--warning)",
+                    }}
+                  >
+                    <div className="font-semibold mb-2">
+                      ⚠ Paiement en retard ({paymentOverdueDays} jours)
+                    </div>
+                    <Button
+                      variant="light"
+                      size="sm"
+                      onClick={() =>
+                        toast.info("Bientôt — relance MOA par email (Resend)")
+                      }
+                      className="w-full"
+                    >
+                      Relancer la MOA
+                    </Button>
+                  </div>
+                )}
+                <Button
+                  className="w-full"
+                  variant="light"
+                  onClick={handlePaid}
+                  disabled={busy}
+                  title="À cocher si la MOA t'a confirmé avoir payé l'entreprise. Utile pour le suivi des retards (relances après 30 j)."
+                >
+                  Marquer comme payé par la MOA
+                </Button>
+              </>
             )}
             {cp.statut === "paye" && (
               <div
@@ -251,7 +306,7 @@ export function CpDetailClient({ cp }: { cp: CpData }) {
                   color: "var(--success)",
                 }}
               >
-                ✓ CP soldé le {formatDateFr(cp.paidAt)}
+                ✓ Payé par la MOA — déclaré le {formatDateFr(cp.paidAt)}
               </div>
             )}
             <a
@@ -279,13 +334,34 @@ export function CpDetailClient({ cp }: { cp: CpData }) {
               done
             />
             <Timeline
+              label="Validé"
+              date={
+                cp.statut === "a_valider" ||
+                cp.statut === "signe" ||
+                cp.statut === "envoye" ||
+                cp.statut === "paye"
+                  ? cp.createdAt
+                  : null
+              }
+              done={cp.statut !== "brouillon"}
+            />
+            <Timeline
               label="Signé"
               by={cp.signedByUser?.name}
               date={cp.signedAt}
               done={Boolean(cp.signedAt)}
             />
-            <Timeline label="Envoyé" date={cp.sentAt} done={Boolean(cp.sentAt)} />
-            <Timeline label="Payé" date={cp.paidAt} done={Boolean(cp.paidAt)} />
+            <Timeline
+              label="Envoyé à la MOA pour paiement"
+              date={cp.sentAt}
+              done={Boolean(cp.sentAt)}
+            />
+            <Timeline
+              label="Payé par la MOA"
+              date={cp.paidAt}
+              done={Boolean(cp.paidAt)}
+              hint="Déclaratif — la MOA paie directement l'entreprise (NF P03-001)."
+            />
           </ul>
         </Card>
 
@@ -367,11 +443,13 @@ function Timeline({
   by,
   date,
   done,
+  hint,
 }: {
   label: string;
   by?: string | null;
   date: Date | null;
   done: boolean;
+  hint?: string;
 }) {
   return (
     <li className="flex items-start gap-3">
@@ -397,6 +475,14 @@ function Timeline({
           >
             {formatDateFr(date)}
             {by ? ` · par ${by}` : ""}
+          </div>
+        )}
+        {hint && !done && (
+          <div
+            className="text-[11px] mt-0.5 italic"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            {hint}
           </div>
         )}
       </div>

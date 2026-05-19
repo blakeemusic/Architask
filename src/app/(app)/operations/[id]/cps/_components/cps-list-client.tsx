@@ -31,6 +31,8 @@ type CpRow = {
   netTtc: string;
   statut: CpStatut;
   createdAt: Date;
+  sentAt: Date | null;
+  paidAt: Date | null;
   lot: {
     id: string;
     numero: string;
@@ -58,7 +60,7 @@ const STATUT_LABEL: Record<CpStatut, string> = {
   a_valider: "À valider",
   signe: "Signé",
   envoye: "Envoyé",
-  paye: "Payé",
+  paye: "Payé par MOA",
 };
 
 const STATUT_VARIANT: Record<CpStatut, "neutral" | "warning" | "info" | "brand" | "success"> = {
@@ -69,15 +71,30 @@ const STATUT_VARIANT: Record<CpStatut, "neutral" | "warning" | "info" | "brand" 
   paye: "success",
 };
 
-type Tab = "all" | "brouillon" | "a_valider" | "signe_envoye" | "paye";
+type Tab =
+  | "all"
+  | "brouillon"
+  | "a_valider"
+  | "signe_envoye"
+  | "overdue"
+  | "paye";
 
 const TAB_FILTERS: Record<Tab, CpStatut[] | null> = {
   all: null,
   brouillon: ["brouillon"],
   a_valider: ["a_valider"],
   signe_envoye: ["signe", "envoye"],
+  overdue: ["envoye"], // sous-ensemble : envoyé + sent_at > 30 j (filtré ci-dessous)
   paye: ["paye"],
 };
+
+/** Nb jours depuis l'envoi à la MOA. Renvoie null si pas encore envoyé. */
+function daysSinceSent(sentAt: Date | null, today: Date): number | null {
+  if (!sentAt) return null;
+  return Math.floor(
+    (today.getTime() - sentAt.getTime()) / (1000 * 60 * 60 * 24),
+  );
+}
 
 export function CpsListClient({
   operation,
@@ -97,12 +114,31 @@ export function CpsListClient({
 }) {
   const [tab, setTab] = React.useState<Tab>("all");
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [today] = React.useState(() => new Date());
+
+  // Count des CP en retard de paiement (envoyé depuis > 30 j sans confirm).
+  const overdueCount = React.useMemo(
+    () =>
+      cps.filter((cp) => {
+        if (cp.statut !== "envoye") return false;
+        const days = daysSinceSent(cp.sentAt, today);
+        return days !== null && days > 30;
+      }).length,
+    [cps, today],
+  );
 
   const filteredCps = React.useMemo(() => {
     const statuts = TAB_FILTERS[tab];
     if (!statuts) return cps;
-    return cps.filter((cp) => statuts.includes(cp.statut));
-  }, [cps, tab]);
+    let list = cps.filter((cp) => statuts.includes(cp.statut));
+    if (tab === "overdue") {
+      list = list.filter((cp) => {
+        const days = daysSinceSent(cp.sentAt, today);
+        return days !== null && days > 30;
+      });
+    }
+    return list;
+  }, [cps, tab, today]);
 
   const cumulCompact = formatMoneyCompact(kpis.cumulEmisHt);
 
@@ -208,7 +244,13 @@ export function CpsListClient({
             },
             { value: "a_valider", label: `À valider · ${kpis.aValider}` },
             { value: "signe_envoye", label: "Signés / envoyés" },
-            { value: "paye", label: `Payés · ${kpis.payes}` },
+            {
+              value: "overdue",
+              label: overdueCount > 0
+                ? `En retard · ${overdueCount}`
+                : "En retard",
+            },
+            { value: "paye", label: `Payés MOA · ${kpis.payes}` },
           ]}
         />
       </div>
@@ -313,17 +355,7 @@ export function CpsListClient({
                       {formatMoneyFull(cp.netTtc)}
                     </td>
                     <td className="py-3 px-7">
-                      <StatusPill variant={STATUT_VARIANT[cp.statut]} size="sm">
-                        {STATUT_LABEL[cp.statut]}
-                      </StatusPill>
-                      {cp.statut === "paye" && (
-                        <span
-                          className="text-[10px] block mt-1"
-                          style={{ color: "var(--text-tertiary)" }}
-                        >
-                          {formatDateShort(cp.createdAt)}
-                        </span>
-                      )}
+                      <StatusCell cp={cp} today={today} />
                     </td>
                   </tr>
                 ))}
@@ -360,5 +392,60 @@ export function CpsListClient({
       )}
 
     </div>
+  );
+}
+
+// ---------------------------------------------------------------
+// StatusCell — pill + sous-libellé contextuel (envoyé · X jours,
+// payé par MOA le X, retard de paiement…)
+// ---------------------------------------------------------------
+
+function StatusCell({ cp, today }: { cp: CpRow; today: Date }) {
+  if (cp.statut === "envoye") {
+    const days = daysSinceSent(cp.sentAt, today);
+    const overdue = days !== null && days > 30;
+    return (
+      <>
+        <StatusPill variant={overdue ? "warning" : STATUT_VARIANT.envoye} size="sm">
+          {overdue ? `Retard ${days}j` : "Envoyé"}
+        </StatusPill>
+        {days !== null && (
+          <span
+            className="text-[10px] block mt-1 font-tabular"
+            style={{
+              color: overdue ? "var(--warning)" : "var(--text-tertiary)",
+            }}
+          >
+            {overdue
+              ? `Paiement MOA en retard de ${days - 30}j`
+              : `Envoyé · ${days}j`}
+          </span>
+        )}
+      </>
+    );
+  }
+
+  if (cp.statut === "paye") {
+    return (
+      <>
+        <StatusPill variant="success" size="sm">
+          Payé par MOA
+        </StatusPill>
+        {cp.paidAt && (
+          <span
+            className="text-[10px] block mt-1 font-tabular"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            Déclaré le {formatDateShort(cp.paidAt)}
+          </span>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <StatusPill variant={STATUT_VARIANT[cp.statut]} size="sm">
+      {STATUT_LABEL[cp.statut]}
+    </StatusPill>
   );
 }

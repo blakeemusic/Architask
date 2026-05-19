@@ -19,14 +19,6 @@ const FR_NUMBER_2 = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 2,
 });
 
-// Regex robuste pour stripper U+00A0 (no-break space) et U+202F (narrow
-// no-break space) que Intl.NumberFormat fr-FR insère comme séparateur de
-// milliers. Construite via le constructeur RegExp avec escape \u explicite
-// pour ne pas dépendre de l'encodage du fichier source (un copy-paste
-// depuis le terminal ou une normalisation d'éditeur peut transformer un
-// U+202F invisible en U+0020 ASCII et casser le replace).
-const NBSP_REGEX = new RegExp("[\\u00A0\\u202F]", "g");
-
 /**
  * Montant adaptatif pour les KPI hero (big bold).
  * < 1k          → "850 €"

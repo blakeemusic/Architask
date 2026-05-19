@@ -872,6 +872,10 @@ async function seed() {
           step.finalStatut === "envoye" || step.finalStatut === "paye"
             ? new Date(emissionDate.getTime() + 2 * 24 * 60 * 60 * 1000)
             : null,
+        // paidAt = date à laquelle l'archi a DÉCLARÉ que la MOA a payé
+        // l'entreprise (info reçue par retour MOA ou relance entreprise).
+        // L'archi (MOE) ne perçoit pas le paiement directement —
+        // NF P03-001 : la MOA paie directement l'entreprise.
         paidAt:
           step.finalStatut === "paye"
             ? new Date(emissionDate.getTime() + 20 * 24 * 60 * 60 * 1000)
