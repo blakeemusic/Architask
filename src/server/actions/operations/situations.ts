@@ -199,22 +199,45 @@ export async function createSituationFromOCR(
       })
       .returning();
 
+    // INSERT lignes + récupère les rows pour les renvoyer à l'UI avec leurs IDs.
+    const insertedLines: Array<{
+      id: string;
+      designation: string;
+      unite: string | null;
+      pctAvancement: number;
+      montantCumuleHt: number;
+      confidence: number;
+      matchedDpgfLineId: string | null;
+    }> = [];
     for (const poste of ocrData.postes) {
-      await db.insert(situationLines).values({
-        situationId: situationRow.id,
-        dpgfLineId: poste.matchedDpgfLineId ?? null,
-        pctAvancement: poste.pctAvancement.toFixed(2),
-        montantCumuleHt:
-          poste.montantCumuleHt !== undefined
-            ? poste.montantCumuleHt.toFixed(2)
-            : "0",
-        ocrConfidence: Math.round(poste.confidence),
+      const [row] = await db
+        .insert(situationLines)
+        .values({
+          situationId: situationRow.id,
+          dpgfLineId: poste.matchedDpgfLineId ?? null,
+          pctAvancement: poste.pctAvancement.toFixed(2),
+          montantCumuleHt:
+            poste.montantCumuleHt !== undefined
+              ? poste.montantCumuleHt.toFixed(2)
+              : "0",
+          ocrConfidence: Math.round(poste.confidence),
+        })
+        .returning();
+      insertedLines.push({
+        id: row.id,
+        designation: poste.designation,
+        unite: poste.unite ?? null,
+        pctAvancement: poste.pctAvancement,
+        montantCumuleHt: poste.montantCumuleHt ?? 0,
+        confidence: poste.confidence,
+        matchedDpgfLineId: poste.matchedDpgfLineId ?? null,
       });
     }
 
     revalidatePath(`/operations/${lot.operation.id}`);
     return ok({
       situation: situationRow,
+      postes: insertedLines,
       ocrSummary: {
         confidenceGlobale: ocrData.confidenceGlobale,
         nbPostes: ocrData.postes.length,

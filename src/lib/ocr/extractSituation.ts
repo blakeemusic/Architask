@@ -100,7 +100,7 @@ export async function extractSituation(
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
   const dpgfHint = context.dpgfLines && context.dpgfLines.length > 0
-    ? `\n\nPostes DPGF connus (utilise-les pour matcher si pertinent) :\n${context.dpgfLines
+    ? `\n\nPostes DPGF connus (utilise-les pour matcher la désignation si elle correspond) :\n${context.dpgfLines
         .map(
           (l) =>
             `- "${l.designation}" (${l.unite ?? "?"}, PU ${l.prixUnitaireHt ?? "?"} €)`,
@@ -108,28 +108,57 @@ export async function extractSituation(
         .join("\n")}`
     : "";
 
-  const systemPrompt = `Tu es un assistant qui lit des situations de travaux d'entreprise BTP en français (marché privé, NF P03-001). Pour chaque ligne du tableau d'avancement, retourne UNIQUEMENT du JSON conforme au schéma demandé.
+  const systemPrompt = `Tu es un assistant qui lit des situations de travaux d'entreprise BTP en français (marché privé, NF P03-001).
 
-Schéma attendu :
+Le PDF contient un tableau avec typiquement ces colonnes (les libellés peuvent varier) :
+- "Désignation" / "Postes" / "Description" → texte de la ligne
+- "Unité" / "Un." / "U." → m², m³, u., ml, etc.
+- "Quantité" / "Qté" / "Qté exécutée" → nombre
+- "% Avancement" / "% AVT" / "% Av." → nombre 0-100
+- "Cumul HT" / "Montant cumulé HT" / "Cumul" → montant en euros
+
+Retourne UNIQUEMENT du JSON conforme au schéma suivant, sans texte avant/après, sans bloc \`\`\` :
+
 {
   "postes": [
     {
-      "designation": "string",
+      "designation": "string — RECOPIE LE TEXTE LITTÉRAL DU PDF",
       "unite": "string optional",
       "quantiteExecutee": "number optional",
       "pctAvancement": "number 0-100",
-      "montantCumuleHt": "number optional",
-      "confidence": "number 0-100"
+      "montantCumuleHt": "number optional, EN EUROS sans la devise",
+      "confidence": "number 0-100 — varie selon la lisibilité réelle"
     }
   ],
   "confidenceGlobale": "number 0-100"
 }
 
-Règles :
-- Si tu n'es pas sûr d'une valeur, mets confidence=0 et n'invente pas.
-- Marché HT total du lot : ${context.lotMarcheHt} €.
-- Réponds en JSON pur, sans texte avant/après, sans bloc \`\`\`.
-${dpgfHint}`;
+RÈGLES STRICTES :
+
+1. designation : COPIE EXACTEMENT le texte du PDF, mot pour mot. JAMAIS de libellé générique.
+   ✅ Bon : "Terrassements généraux", "Fondations superficielles", "Voiles béton armé R+1", "Plancher haut RDC"
+   ❌ Mauvais : "Poste 1", "Poste 1 extrait", "Première ligne", "Item X", "Poste principal n°1"
+
+2. pctAvancement : LIS la valeur de la colonne "% AVT" / "% Avancement" / "% Av." pour CHAQUE ligne.
+   Si la cellule contient "30 %" → renvoie 30. Si elle contient "100%" → renvoie 100.
+   NE PAS mettre 0 par défaut — c'est une donnée critique pour le calcul du CP.
+
+3. montantCumuleHt : LIS la valeur de la colonne "Cumul HT" / "Cumul" pour CHAQUE ligne, EN EUROS, sans la devise, sans séparateur de milliers.
+   Si la cellule contient "70 848 €" → renvoie 70848. Si elle contient "1 234,50 €" → renvoie 1234.50.
+   ❌ Ne pas mettre "Montant non extrait" — utilise une valeur numérique ou omets le champ.
+
+4. confidence : VARIE selon ta certitude réelle ligne par ligne.
+   ✅ Bon : 98, 95, 88, 72, 95, 65 (différent selon difficulté)
+   ❌ Mauvais : 80, 80, 80, 80, 80 (tous identiques)
+   • 95-100 : valeurs très claires et nettes
+   • 70-94 : lisibles mais une ambiguïté (chiffre flou, désignation peu claire)
+   • <70 : difficile à lire, faible certitude
+
+5. confidenceGlobale : moyenne pondérée + ajustement selon la qualité globale du PDF.
+
+6. Si tu n'arrives pas à lire une valeur, omets le champ optionnel plutôt que d'inventer.
+
+Marché HT du lot : ${context.lotMarcheHt} €.${dpgfHint}`;
 
   try {
     const startedAt = Date.now();

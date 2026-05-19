@@ -80,6 +80,29 @@ export function formatMoneyExact(
   return `${FR_NUMBER_2.format(n)} €`;
 }
 
+/**
+ * Variante pour les PDF générés par @react-pdf/renderer.
+ *
+ * Bug @react-pdf/renderer : la police par défaut (Helvetica) ne sait pas
+ * rendre le narrow no-break space U+202F que Intl.NumberFormat('fr-FR')
+ * insère comme séparateur de milliers — résultat : "149/120,00€" au lieu
+ * de "149 120,00 €". On remplace U+00A0 et U+202F par un espace ASCII.
+ *
+ * À utiliser UNIQUEMENT dans les templates PDF. Côté UI web,
+ * formatMoneyFull/Exact sont OK (Chrome/Safari rendent correctement le
+ * narrow no-break space).
+ */
+export function formatMoneyForPdf(
+  value: number | string | null | undefined,
+  options: { decimals?: 0 | 2 } = {},
+): string {
+  const n = toNumber(value);
+  if (n === null) return "—";
+  const decimals = options.decimals ?? 2;
+  const formatter = decimals === 0 ? FR_NUMBER : FR_NUMBER_2;
+  return formatter.format(n).replace(/[  ]/g, " ");
+}
+
 export function formatPct(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return `${Math.round(value)} %`;

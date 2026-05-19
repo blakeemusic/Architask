@@ -20,6 +20,7 @@ import {
 import {
   createSituationFromManual,
   createSituationFromOCR,
+  updateSituation,
 } from "@/server/actions/operations/situations";
 import {
   createCPFromSituation,
@@ -82,11 +83,13 @@ export function CpCreateDrawer({
     return { mois: d.getMonth() + 1, annee: d.getFullYear() };
   });
 
-  // OCR state
+  // OCR state — postes inclut situationLineId pour pouvoir update après édition.
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [ocrLoading, setOcrLoading] = React.useState(false);
   const [ocrError, setOcrError] = React.useState<string | null>(null);
-  const [ocrPostes, setOcrPostes] = React.useState<OcrPoste[]>([]);
+  const [ocrPostes, setOcrPostes] = React.useState<
+    Array<OcrPoste & { situationLineId?: string; montantCumuleHt?: number }>
+  >([]);
   const [ocrConfidenceGlobale, setOcrConfidenceGlobale] = React.useState<number | null>(null);
   const [situationId, setSituationId] = React.useState<string | null>(null);
 
@@ -153,22 +156,21 @@ export function CpCreateDrawer({
     }
     setSituationId(res.data.situation.id);
     setOcrConfidenceGlobale(res.data.ocrSummary.confidenceGlobale);
-    // Pour récupérer les postes avec confidence, on doit query la situation.
-    // Pour simplifier en MVP : on reload via getSituationById sur le serveur.
-    // Mais ici on a déjà l'OCR summary — on regénère les postes "à l'œil".
-    // Comme l'action OCR insère déjà les situation_lines, on les a en DB.
-    // Le drawer ne les ré-affiche pas avec confidence individuelle pour MVP —
-    // on saute directement à l'étape de calcul (Step 2).
     toast.success(
       `OCR terminé : ${res.data.ocrSummary.nbPostes} postes (confiance globale ${Math.round(res.data.ocrSummary.confidenceGlobale)}%)`,
     );
 
-    // Set placeholder postes pour visualisation (sans les valeurs exactes pour ce sprint).
+    // Affiche les vrais postes retournés par Claude (avec situationLineId
+    // pour pouvoir persister les éditions de l'utilisateur).
     setOcrPostes(
-      Array.from({ length: res.data.ocrSummary.nbPostes }).map((_, i) => ({
-        designation: `Poste ${i + 1} extrait`,
-        pctAvancement: 0,
-        confidence: Math.round(res.data.ocrSummary.confidenceGlobale),
+      res.data.postes.map((p) => ({
+        situationLineId: p.id,
+        designation: p.designation,
+        unite: p.unite ?? undefined,
+        pctAvancement: p.pctAvancement,
+        montantCumuleHt: p.montantCumuleHt,
+        confidence: p.confidence,
+        matchedDpgfLineId: p.matchedDpgfLineId ?? undefined,
       })),
     );
   };
@@ -200,6 +202,24 @@ export function CpCreateDrawer({
       toast.error("Aucune situation prête.");
       setCreating(false);
       return;
+    }
+
+    // Si source=pdf et l'utilisateur a édité des % dans les OcrValidationCard,
+    // on persiste les modifications avant de calculer le CP.
+    if (source === "pdf" && ocrPostes.length > 0) {
+      const editedLines = ocrPostes
+        .filter((p) => p.situationLineId)
+        .map((p) => ({
+          id: p.situationLineId as string,
+          pctAvancement: p.pctAvancement.toFixed(2),
+          montantCumuleHt:
+            p.montantCumuleHt !== undefined
+              ? p.montantCumuleHt.toFixed(2)
+              : null,
+        }));
+      if (editedLines.length > 0) {
+        await updateSituation({ id: sitId, lines: editedLines });
+      }
     }
 
     const cpRes = await createCPFromSituation({ situationId: sitId });

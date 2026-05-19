@@ -187,7 +187,7 @@ export async function GET(req: Request) {
               <Text style={styles.cellQty}>{line.quantite}</Text>
               <Text style={styles.cellPct}>{line.pct} %</Text>
               <Text style={styles.cellAmount}>
-                {line.cumulHt.toLocaleString("fr-FR")} €
+                {line.cumulHt.toLocaleString("fr-FR").replace(/[  ]/g, " ")} €
               </Text>
             </View>
           ))}
@@ -195,7 +195,7 @@ export async function GET(req: Request) {
 
         <View style={styles.total}>
           <Text>Cumul travaux exécutés HT</Text>
-          <Text>{totalCumul.toLocaleString("fr-FR")} €</Text>
+          <Text>{totalCumul.toLocaleString("fr-FR").replace(/[  ]/g, " ")} €</Text>
         </View>
 
         <Text style={{ marginTop: 22, fontSize: 9, color: "#5F6675" }}>

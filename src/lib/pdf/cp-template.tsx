@@ -223,10 +223,16 @@ export type CpPdfData = {
 function formatEur(raw: string): string {
   const n = Number(raw);
   if (Number.isNaN(n)) return raw;
+  // U+00A0 / U+202F (espaces insécables insérés par Intl.NumberFormat
+  // fr-FR) ne sont pas rendus par Helvetica → on les remplace par un
+  // espace ASCII pour que le PDF affiche "149 120,00" au lieu de
+  // "149/120,00".
   return new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(n);
+  })
+    .format(n)
+    .replace(/[  ]/g, " ");
 }
 
 function formatDateFr(d: Date | null | undefined): string {
