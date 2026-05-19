@@ -22,7 +22,7 @@ import {
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CompanyListItem } from "@/server/actions/annuaire/companies";
-import { computeTemporalAvancement } from "@/lib/operations-compute";
+import { computeAvancement } from "@/lib/operations-compute";
 
 import { LotCreateDrawer } from "./lot-create-drawer";
 
@@ -71,6 +71,15 @@ type OperationDetail = {
   }>;
 };
 
+type CpRowLite = {
+  id: string;
+  lotId: string;
+  brutAPayerHt: string;
+  netTtc: string;
+  retenueGarantie: string;
+  statut: "brouillon" | "a_valider" | "signe" | "envoye" | "paye";
+};
+
 const DONUT_COLORS = [
   "#1F2DEA",
   "#4F5DFF",
@@ -84,9 +93,11 @@ const DONUT_COLORS = [
 
 export function OperationRecapClient({
   operation,
+  cps,
   companies,
 }: {
   operation: OperationDetail;
+  cps: CpRowLite[];
   companies: CompanyListItem[];
 }) {
   const [today] = React.useState(() => new Date());
@@ -110,17 +121,37 @@ export function OperationRecapClient({
   const avenantsPctDerive =
     marcheInitial === 0 ? 0 : (cumulAvenantsSignes / marcheInitial) * 100;
 
-  // TODO Sprint CP : Cumul CP réel via Σ certificats_paiement.net_ttc.
-  const cumulCpHt = 0;
-  // TODO Sprint CP : Retenue = Σ CP.retenue_garantie.
-  const retenue = 0;
+  // CP cumulés réels (sprint CP).
+  const cpsNonBrouillon = cps.filter((cp) => cp.statut !== "brouillon");
+  const cumulCpHt = cpsNonBrouillon.reduce(
+    (s, cp) => s + Number(cp.brutAPayerHt ?? 0),
+    0,
+  );
+  const retenue = cpsNonBrouillon.reduce(
+    (s, cp) => s + Number(cp.retenueGarantie ?? 0),
+    0,
+  );
   const restant = marcheRevise - cumulCpHt;
 
-  const pctAvancement = computeTemporalAvancement(
-    operation.dateOs,
-    operation.dateReceptionCible,
+  // Avancement hybride : financier si CP émis, sinon temporel.
+  const avancement = computeAvancement({
+    marcheReviseHt: marcheRevise,
+    cpsNonBrouillon,
+    dateOs: operation.dateOs,
+    dateReceptionCible: operation.dateReceptionCible,
     today,
-  );
+  });
+  const pctAvancement = avancement.pct;
+
+  // Cumul CP par lot pour le tableau.
+  const cpsByLot = new Map<string, { cumulBrut: number; cumulRetenue: number; count: number }>();
+  for (const cp of cpsNonBrouillon) {
+    const entry = cpsByLot.get(cp.lotId) ?? { cumulBrut: 0, cumulRetenue: 0, count: 0 };
+    entry.cumulBrut += Number(cp.brutAPayerHt);
+    entry.cumulRetenue += Number(cp.retenueGarantie);
+    entry.count += 1;
+    cpsByLot.set(cp.lotId, entry);
+  }
 
   // Build donut segments (top 5 + bucket).
   const donutSegments = operation.lots.map((l, i) => ({
@@ -328,8 +359,10 @@ export function OperationRecapClient({
               className="text-[12px] mt-0.5"
               style={{ color: "var(--text-secondary)" }}
             >
-              {pctAvancement} % du planning écoulé
-              {/* TODO Sprint CP : pondérer par Σ CP / marché révisé */}
+              {pctAvancement} %{" "}
+              {avancement.source === "financier"
+                ? "financier (Σ CP / marché révisé)"
+                : "du planning écoulé"}
             </div>
           </div>
           <div className="flex items-baseline gap-1">
@@ -415,6 +448,21 @@ export function OperationRecapClient({
                         lot.avenants
                           .filter((a) => a.statut === "signe")
                           .reduce((s, a) => s + Number(a.montantHt ?? 0), 0);
+                      const cpAgg = cpsByLot.get(lot.id) ?? {
+                        cumulBrut: 0,
+                        cumulRetenue: 0,
+                        count: 0,
+                      };
+                      const lotPct =
+                        marcheLotRevise === 0
+                          ? 0
+                          : Math.round((cpAgg.cumulBrut / marcheLotRevise) * 100);
+                      const pctColor =
+                        lotPct >= 95
+                          ? "var(--success)"
+                          : lotPct >= 50
+                            ? "var(--brand)"
+                            : "var(--text-primary)";
                       return (
                         <tr
                           key={lot.id}
@@ -465,10 +513,15 @@ export function OperationRecapClient({
                             className="py-3 text-right"
                             style={{ color: "var(--text-secondary)" }}
                           >
-                            {/* TODO Sprint CP */}— €
+                            {cpAgg.count === 0
+                              ? "— €"
+                              : formatMoneyFull(cpAgg.cumulBrut)}
                           </td>
-                          <td className="py-3 px-2 text-right font-semibold">
-                            0 %
+                          <td
+                            className="py-3 px-2 text-right font-semibold"
+                            style={{ color: pctColor }}
+                          >
+                            {lotPct} %
                           </td>
                           <td className="py-3 px-4">
                             <StatusPill

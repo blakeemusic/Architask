@@ -29,8 +29,8 @@ export function computeMarcheReviseFromLots(
 
 /**
  * % d'avancement temporel d'une opération (mois écoulés / mois totaux).
- * TODO Sprint CP : remplacer par Σ CP émis / marché révisé (pondération
- * financière, plus pertinente que purement temporelle).
+ * Sert de fallback quand l'opération n'a pas encore de CP émis (cf.
+ * computeAvancement ci-dessous).
  */
 export function computeTemporalAvancement(
   dateOs: Date | null,
@@ -43,4 +43,48 @@ export function computeTemporalAvancement(
   const elapsed = today.getTime() - dateOs.getTime();
   const pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
   return Math.round(pct);
+}
+
+/**
+ * % d'avancement financier : Σ CP non-brouillon (brut HT) / marché révisé.
+ * Renvoie null si aucun CP non-brouillon (le caller fallback sur temporel).
+ */
+export function computeFinancialAvancement(
+  marcheReviseHt: string | number,
+  cpsNonBrouillon: ReadonlyArray<{ brutAPayerHt: string | null }>,
+): number | null {
+  if (cpsNonBrouillon.length === 0) return null;
+  const marche = Number(marcheReviseHt);
+  if (Number.isNaN(marche) || marche === 0) return null;
+  const cumul = cpsNonBrouillon.reduce(
+    (s, cp) => s + Number(cp.brutAPayerHt ?? 0),
+    0,
+  );
+  return Math.round((cumul / marche) * 100);
+}
+
+/**
+ * Avancement hybride : financier si CP émis, sinon temporel.
+ * C'est le helper que les pages doivent utiliser depuis le sprint CP.
+ */
+export function computeAvancement(opts: {
+  marcheReviseHt: string | number;
+  cpsNonBrouillon: ReadonlyArray<{ brutAPayerHt: string | null }>;
+  dateOs: Date | null;
+  dateReceptionCible: Date | null;
+  today: Date;
+}): { pct: number; source: "financier" | "temporel" } {
+  const financier = computeFinancialAvancement(
+    opts.marcheReviseHt,
+    opts.cpsNonBrouillon,
+  );
+  if (financier !== null) return { pct: financier, source: "financier" };
+  return {
+    pct: computeTemporalAvancement(
+      opts.dateOs,
+      opts.dateReceptionCible,
+      opts.today,
+    ),
+    source: "temporel",
+  };
 }

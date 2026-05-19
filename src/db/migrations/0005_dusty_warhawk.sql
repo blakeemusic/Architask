@@ -1,0 +1,3 @@
+ALTER TABLE "certificats_paiement" ADD COLUMN "signed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "certificats_paiement" ADD COLUMN "signed_by_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "certificats_paiement" ADD CONSTRAINT "certificats_paiement_signed_by_user_id_users_id_fk" FOREIGN KEY ("signed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

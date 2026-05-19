@@ -39,7 +39,11 @@ import {
   lots,
   operations,
   planningTasks,
+  situations,
+  situationLines,
 } from "./schema/operations";
+import { certificatsPaiement } from "./schema/finance";
+import { computeCP } from "../lib/finance/computeCP";
 
 // ---------------------------------------------------------------
 // Helpers
@@ -300,6 +304,14 @@ async function seed() {
     .onConflictDoNothing({
       target: [users.clerkUserId, users.organizationId],
     });
+  const ownerUserRow = await db.query.users.findFirst({
+    where: and(
+      eq(users.clerkUserId, SEED_USER_CLERK_ID),
+      eq(users.organizationId, org.id),
+    ),
+  });
+  if (!ownerUserRow) throw new Error("Owner user seed introuvable.");
+  const ownerUserId = ownerUserRow.id;
   console.log("✓ User owner: Camille Aubert");
 
   // 3. Companies + insurances + contacts
@@ -695,6 +707,190 @@ async function seed() {
   console.log(`✓ Lots: ${lotCount} créés`);
   console.log(`✓ Planning tasks: ${planningTaskCount} créés`);
   console.log(`✓ Avenants signés: ${avenantCount} créés`);
+
+  // 6. Situations + CPs historiques sur certaines opérations
+  //    Calculés via le moteur computeCP pour avoir des valeurs cohérentes
+  //    NF P03-001 (mêmes que celles attendues en prod).
+  const SITUATION_SCENARIOS: Array<{
+    opCode: string;
+    lotNumero: string;
+    history: Array<{
+      monthsAgo: number;
+      pctGlobal: string;
+      finalStatut: "paye" | "signe" | "envoye" | "a_valider" | "brouillon";
+    }>;
+  }> = [
+    {
+      opCode: "RC",
+      lotNumero: "01",
+      history: [
+        { monthsAgo: 3, pctGlobal: "50.00", finalStatut: "paye" },
+        { monthsAgo: 2, pctGlobal: "65.00", finalStatut: "paye" },
+        { monthsAgo: 1, pctGlobal: "74.00", finalStatut: "signe" },
+      ],
+    },
+    {
+      opCode: "RC",
+      lotNumero: "02",
+      history: [
+        { monthsAgo: 3, pctGlobal: "60.00", finalStatut: "paye" },
+        { monthsAgo: 2, pctGlobal: "80.00", finalStatut: "paye" },
+        { monthsAgo: 1, pctGlobal: "100.00", finalStatut: "envoye" },
+      ],
+    },
+    {
+      opCode: "EM",
+      lotNumero: "01",
+      history: [
+        { monthsAgo: 0, pctGlobal: "30.00", finalStatut: "brouillon" },
+      ],
+    },
+  ];
+
+  let situationCount = 0;
+  let cpCount = 0;
+  for (const scenario of SITUATION_SCENARIOS) {
+    const op = await db.query.operations.findFirst({
+      where: and(
+        eq(operations.organizationId, org.id),
+        eq(operations.code, scenario.opCode),
+      ),
+    });
+    if (!op) continue;
+    const lot = await db.query.lots.findFirst({
+      where: and(eq(lots.operationId, op.id), eq(lots.numero, scenario.lotNumero)),
+      with: { avenants: true },
+    });
+    if (!lot) continue;
+
+    let sequence = 1;
+    const previousCps: Array<{
+      brutAPayerHt: string;
+      retenueGarantie: string;
+      statut: "brouillon" | "a_valider" | "signe" | "envoye" | "paye";
+    }> = [];
+
+    for (const step of scenario.history) {
+      const periodDate = new Date();
+      periodDate.setMonth(periodDate.getMonth() - step.monthsAgo);
+      const periodeMois = periodDate.getMonth() + 1;
+      const periodeAnnee = periodDate.getFullYear();
+
+      // Check existence (idempotence).
+      const existingSit = await db.query.situations.findFirst({
+        where: and(
+          eq(situations.lotId, lot.id),
+          eq(situations.periodeMois, periodeMois),
+          eq(situations.periodeAnnee, periodeAnnee),
+        ),
+      });
+      let situationId = existingSit?.id;
+
+      if (!existingSit) {
+        const [sitRow] = await db
+          .insert(situations)
+          .values({
+            lotId: lot.id,
+            periodeMois,
+            periodeAnnee,
+            source: "manual",
+            ocrStatus: "done",
+          })
+          .returning();
+        situationId = sitRow.id;
+        await db.insert(situationLines).values({
+          situationId: sitRow.id,
+          pctAvancement: step.pctGlobal,
+          montantCumuleHt: "0",
+        });
+        situationCount += 1;
+      }
+
+      if (!situationId) continue;
+
+      // Numéro CP attendu
+      const numero = `CP-${scenario.opCode}-${scenario.lotNumero}-${String(sequence).padStart(3, "0")}`;
+
+      // Check existence CP (idempotence).
+      const existingCp = await db.query.certificatsPaiement.findFirst({
+        where: eq(certificatsPaiement.numero, numero),
+      });
+      sequence += 1;
+
+      const computeResult = computeCP({
+        lot: {
+          montantMarcheHt: lot.montantMarcheHt,
+          retenueGarantiePct: lot.retenueGarantiePct,
+          tauxTva: lot.tauxTva,
+          avenantsSignes: lot.avenants
+            .filter((a) => a.statut === "signe")
+            .map((a) => ({ montantHt: a.montantHt ?? "0" })),
+        },
+        situation: { mode: "global", pctGlobal: step.pctGlobal },
+        previousCPs: previousCps,
+      });
+      if (!computeResult.ok) continue;
+      const m = computeResult.data;
+
+      // Toujours alimenter previousCps même si le CP existe déjà — pour les
+      // CP suivants du même scénario.
+      if (
+        step.finalStatut !== "brouillon" &&
+        step.finalStatut !== "a_valider"
+      ) {
+        previousCps.push({
+          brutAPayerHt: m.brutAPayerHt,
+          retenueGarantie: m.retenueGarantie,
+          statut: step.finalStatut,
+        });
+      }
+
+      if (existingCp) continue;
+
+      const emissionDate = new Date(periodDate);
+      emissionDate.setDate(28);
+      const dueDate = new Date(emissionDate);
+      dueDate.setDate(dueDate.getDate() + lot.delaiPaiementJours);
+
+      await db.insert(certificatsPaiement).values({
+        operationId: op.id,
+        lotId: lot.id,
+        numero,
+        situationId,
+        periodeMois,
+        periodeAnnee,
+        cumulTravauxHt: m.cumulTravauxHt,
+        cumulCpPrecedentsHt: m.cumulCpPrecedentsHt,
+        brutAPayerHt: m.brutAPayerHt,
+        retenueGarantie: m.retenueGarantie,
+        revisionMontantHt: m.revisionMontantHt,
+        tva: m.tva,
+        netTtc: m.netTtc,
+        statut: step.finalStatut,
+        dueDate,
+        sentAt:
+          step.finalStatut === "envoye" || step.finalStatut === "paye"
+            ? new Date(emissionDate.getTime() + 2 * 24 * 60 * 60 * 1000)
+            : null,
+        paidAt:
+          step.finalStatut === "paye"
+            ? new Date(emissionDate.getTime() + 20 * 24 * 60 * 60 * 1000)
+            : null,
+        signedAt:
+          step.finalStatut !== "brouillon" && step.finalStatut !== "a_valider"
+            ? new Date(emissionDate.getTime() + 1 * 24 * 60 * 60 * 1000)
+            : null,
+        createdBy: ownerUserId,
+        signedByUserId:
+          step.finalStatut !== "brouillon" && step.finalStatut !== "a_valider"
+            ? ownerUserId
+            : null,
+      });
+      cpCount += 1;
+    }
+  }
+  console.log(`✓ Situations: ${situationCount} créées`);
+  console.log(`✓ CPs: ${cpCount} créés (statuts mixés)`);
 
   console.log("✅ Seed terminé !");
 }

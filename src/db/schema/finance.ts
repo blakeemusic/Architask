@@ -72,6 +72,11 @@ export const certificatsPaiement = pgTable(
     dueDate: date("due_date", { mode: "date" }),
     sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
+    /** Snapshot signature MVP (mock — pas d'appel Yousign/DocuSign en MVP). */
+    signedAt: timestamp("signed_at", { withTimezone: true, mode: "date" }),
+    signedByUserId: uuid("signed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -159,6 +164,12 @@ export const certificatsPaiementRelations = relations(
     creator: one(users, {
       fields: [certificatsPaiement.createdBy],
       references: [users.id],
+      relationName: "creator",
+    }),
+    signedByUser: one(users, {
+      fields: [certificatsPaiement.signedByUserId],
+      references: [users.id],
+      relationName: "signer",
     }),
   }),
 );
