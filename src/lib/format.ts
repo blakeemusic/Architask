@@ -19,6 +19,14 @@ const FR_NUMBER_2 = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 2,
 });
 
+// Regex robuste pour stripper U+00A0 (no-break space) et U+202F (narrow
+// no-break space) que Intl.NumberFormat fr-FR insère comme séparateur de
+// milliers. Construite via le constructeur RegExp avec escape \u explicite
+// pour ne pas dépendre de l'encodage du fichier source (un copy-paste
+// depuis le terminal ou une normalisation d'éditeur peut transformer un
+// U+202F invisible en U+0020 ASCII et casser le replace).
+const NBSP_REGEX = new RegExp("[\\u00A0\\u202F]", "g");
+
 /**
  * Montant adaptatif pour les KPI hero (big bold).
  * < 1k          → "850 €"
@@ -84,23 +92,28 @@ export function formatMoneyExact(
  * Variante pour les PDF générés par @react-pdf/renderer.
  *
  * Bug @react-pdf/renderer : la police par défaut (Helvetica) ne sait pas
- * rendre le narrow no-break space U+202F que Intl.NumberFormat('fr-FR')
+ * rendre U+202F (narrow no-break space) que Intl.NumberFormat('fr-FR')
  * insère comme séparateur de milliers — résultat : "149/120,00€" au lieu
- * de "149 120,00 €". On remplace U+00A0 et U+202F par un espace ASCII.
+ * de "149 120,00 €". On remplace U+00A0 et U+202F par un espace ASCII
+ * U+0020 (que Helvetica sait rendre).
  *
  * À utiliser UNIQUEMENT dans les templates PDF. Côté UI web,
  * formatMoneyFull/Exact sont OK (Chrome/Safari rendent correctement le
  * narrow no-break space).
+ *
+ * Par défaut : 2 décimales, sans la devise "€" (le caller la concatène
+ * lui-même pour rester flexible sur le rendu Text dans @react-pdf).
  */
 export function formatMoneyForPdf(
   value: number | string | null | undefined,
-  options: { decimals?: 0 | 2 } = {},
+  options: { decimals?: 0 | 2; withCurrency?: boolean } = {},
 ): string {
   const n = toNumber(value);
   if (n === null) return "—";
   const decimals = options.decimals ?? 2;
   const formatter = decimals === 0 ? FR_NUMBER : FR_NUMBER_2;
-  return formatter.format(n).replace(/[  ]/g, " ");
+  const formatted = formatter.format(n).replace(NBSP_REGEX, " ");
+  return options.withCurrency ? `${formatted} €` : formatted;
 }
 
 export function formatPct(value: number | null | undefined): string {

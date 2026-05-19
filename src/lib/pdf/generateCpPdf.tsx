@@ -109,5 +109,17 @@ export async function generateCpPdf(input: GenerateCpPdfInput): Promise<Buffer> 
     signedByName: input.signedByName,
   };
 
+  // Debug : log les montants clés (string brut ET version formatée pour
+  // PDF) pour vérifier ce qui sort dans la chaîne de formatage. À retirer
+  // quand le bug formatage est définitivement validé.
+  const { formatMoneyForPdf } = await import("@/lib/format");
+  console.info("[PDF] generateCpPdf", {
+    numero: data.numero,
+    rawBrut: data.brutAPayerHt,
+    formattedBrut: formatMoneyForPdf(data.brutAPayerHt),
+    rawNetTtc: data.netTtc,
+    formattedNetTtc: formatMoneyForPdf(data.netTtc),
+  });
+
   return await renderToBuffer(<CpDocument data={data} />);
 }

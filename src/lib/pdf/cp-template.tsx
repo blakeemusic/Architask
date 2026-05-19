@@ -1,17 +1,43 @@
 import {
   Document,
+  Font,
   Page,
   Text,
   View,
   StyleSheet,
 } from "@react-pdf/renderer";
 
+import { formatMoneyForPdf } from "@/lib/format";
+
 /**
  * Template CP-Architask-v1 — @react-pdf/renderer
  *
  * Mentions légales NF P03-001 obligatoires dans le footer. Le bloc signature
  * est rendu uniquement si signedAt est fourni (statut "signé" en MVP).
+ *
+ * Police : Inter enregistrée via Font.register, en remplacement d'Helvetica
+ * par défaut. Inter rend correctement tous les caractères Unicode FR (en
+ * particulier U+202F narrow no-break space) — garantie supplémentaire en
+ * complément du strip déjà fait dans formatMoneyForPdf.
  */
+
+Font.register({
+  family: "Inter",
+  fonts: [
+    {
+      src: "https://rsms.me/inter/font-files/Inter-Regular.woff?v=3.19",
+      fontWeight: 400,
+    },
+    {
+      src: "https://rsms.me/inter/font-files/Inter-SemiBold.woff?v=3.19",
+      fontWeight: 600,
+    },
+    {
+      src: "https://rsms.me/inter/font-files/Inter-Bold.woff?v=3.19",
+      fontWeight: 700,
+    },
+  ],
+});
 
 const COLORS = {
   primary: "#0B0B0F",
@@ -31,7 +57,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     fontSize: 10,
     color: COLORS.primary,
-    fontFamily: "Helvetica",
+    fontFamily: "Inter",
   },
   header: {
     flexDirection: "row",
@@ -220,19 +246,14 @@ export type CpPdfData = {
   signedByName?: string;
 };
 
+/**
+ * Wrapper local qui appelle formatMoneyForPdf depuis @/lib/format.
+ * On le garde pour minimiser le diff avec le code existant (utilisé dans
+ * tout le template). Tout le travail de stripping U+00A0/U+202F est fait
+ * dans le helper centralisé.
+ */
 function formatEur(raw: string): string {
-  const n = Number(raw);
-  if (Number.isNaN(n)) return raw;
-  // U+00A0 / U+202F (espaces insécables insérés par Intl.NumberFormat
-  // fr-FR) ne sont pas rendus par Helvetica → on les remplace par un
-  // espace ASCII pour que le PDF affiche "149 120,00" au lieu de
-  // "149/120,00".
-  return new Intl.NumberFormat("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-    .format(n)
-    .replace(/[  ]/g, " ");
+  return formatMoneyForPdf(raw, { decimals: 2 });
 }
 
 function formatDateFr(d: Date | null | undefined): string {

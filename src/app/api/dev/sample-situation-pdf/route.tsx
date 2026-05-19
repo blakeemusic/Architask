@@ -2,6 +2,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import {
   Document,
+  Font,
   Page,
   StyleSheet,
   Text,
@@ -14,6 +15,22 @@ import { lots } from "@/db/schema/operations";
 import { dpgfLines as dpgfLinesSchema } from "@/db/schema/operations";
 import { env } from "@/lib/env";
 import { getCurrentUser, UnauthenticatedError } from "@/lib/auth";
+import { formatMoneyForPdf } from "@/lib/format";
+
+// Police Inter pour rendre correctement les espaces Unicode FR.
+Font.register({
+  family: "Inter",
+  fonts: [
+    {
+      src: "https://rsms.me/inter/font-files/Inter-Regular.woff?v=3.19",
+      fontWeight: 400,
+    },
+    {
+      src: "https://rsms.me/inter/font-files/Inter-Bold.woff?v=3.19",
+      fontWeight: 700,
+    },
+  ],
+});
 
 /**
  * Endpoint DEV uniquement : génère un PDF de situation type pour pouvoir
@@ -26,7 +43,7 @@ import { getCurrentUser, UnauthenticatedError } from "@/lib/auth";
  */
 
 const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 10, fontFamily: "Helvetica" },
+  page: { padding: 32, fontSize: 10, fontFamily: "Inter" },
   header: { marginBottom: 18 },
   h1: { fontSize: 16, fontWeight: 700, marginBottom: 4 },
   meta: { fontSize: 9, color: "#5F6675" },
@@ -187,7 +204,7 @@ export async function GET(req: Request) {
               <Text style={styles.cellQty}>{line.quantite}</Text>
               <Text style={styles.cellPct}>{line.pct} %</Text>
               <Text style={styles.cellAmount}>
-                {line.cumulHt.toLocaleString("fr-FR").replace(/[  ]/g, " ")} €
+                {formatMoneyForPdf(line.cumulHt, { decimals: 0 })} €
               </Text>
             </View>
           ))}
@@ -195,7 +212,7 @@ export async function GET(req: Request) {
 
         <View style={styles.total}>
           <Text>Cumul travaux exécutés HT</Text>
-          <Text>{totalCumul.toLocaleString("fr-FR").replace(/[  ]/g, " ")} €</Text>
+          <Text>{formatMoneyForPdf(totalCumul, { decimals: 0 })} €</Text>
         </View>
 
         <Text style={{ marginTop: 22, fontSize: 9, color: "#5F6675" }}>
