@@ -6,6 +6,7 @@ import { ThemeToggle } from "./theme-toggle";
 
 export interface AppShellProps {
   user: { name: string; email: string; orgName: string };
+  operationsActiveCount?: number;
   children: React.ReactNode;
 }
 
@@ -13,10 +14,17 @@ export interface AppShellProps {
  * Layout des pages authentifiées : sidebar + glass header + main scrollable.
  * Server component qui prend les infos user via props (fetchées dans le layout).
  */
-export function AppShell({ user, children }: AppShellProps) {
+export function AppShell({
+  user,
+  operationsActiveCount,
+  children,
+}: AppShellProps) {
   return (
     <div className="flex min-h-screen" style={{ background: "var(--bg-base)" }}>
-      <AppSidebar user={user} />
+      <AppSidebar
+        user={user}
+        operationsActiveCount={operationsActiveCount}
+      />
       <div className="flex-1 min-w-0 flex flex-col">
         <header
           className="glass sticky top-0 z-30 border-b"

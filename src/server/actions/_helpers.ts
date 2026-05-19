@@ -11,7 +11,7 @@ export type ActionResult<T> =
   | { data: T; error?: undefined }
   | { error: string; code?: string; data?: undefined };
 
-export function ok<T>(data: T): ActionResult<T> {
+export function ok<T>(data: T): { data: T; error?: undefined } {
   return { data };
 }
 

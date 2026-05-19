@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { organizations } from "@/db/schema/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
+import { getOperationsKpis } from "@/server/actions/operations/operations";
 
 /**
  * Layout du route group (app). Toutes les pages authentifiées sont rendues
@@ -17,10 +18,13 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await getCurrentUser();
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.id, user.organizationId),
-    columns: { name: true },
-  });
+  const [org, kpisRes] = await Promise.all([
+    db.query.organizations.findFirst({
+      where: eq(organizations.id, user.organizationId),
+      columns: { name: true },
+    }),
+    getOperationsKpis(),
+  ]);
 
   return (
     <AppShell
@@ -29,6 +33,7 @@ export default async function AppLayout({
         email: user.email,
         orgName: org?.name ?? "Architask",
       }}
+      operationsActiveCount={kpisRes.data?.totalActive ?? 0}
     >
       {children}
     </AppShell>

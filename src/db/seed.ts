@@ -23,7 +23,7 @@
  * "adopter" l'org seed.
  */
 
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "./index";
 import {
@@ -34,6 +34,12 @@ import {
   moaContacts,
 } from "./schema/annuaire";
 import { organizations, users } from "./schema/auth";
+import {
+  avenants,
+  lots,
+  operations,
+  planningTasks,
+} from "./schema/operations";
 
 // ---------------------------------------------------------------
 // Helpers
@@ -420,6 +426,275 @@ async function seed() {
   }
   console.log(`✓ MOAs: ${moaCount} créés (${MOAS.length} au total)`);
   console.log(`✓ Contacts MOA: ${moaContactCount} créés`);
+
+  // 5. Operations + lots + planning_tasks + avenants
+  //    Trois opérations calquées sur le mockup frame-operation v0.3.
+  const allCompanies = await db.query.companies.findMany({
+    where: eq(companies.organizationId, org.id),
+  });
+  const companyByName = new Map(allCompanies.map((c) => [c.raisonSociale, c]));
+  const allMoas = await db.query.moas.findMany({
+    where: eq(moas.organizationId, org.id),
+  });
+  const moaByName = new Map(allMoas.map((m) => [m.raisonSociale, m]));
+
+  const OPERATIONS: Array<{
+    code: string;
+    name: string;
+    moaName: string;
+    ville: string;
+    codePostal: string;
+    dateOs: Date;
+    dateReceptionCible: Date;
+    montantPrevisionnelHt: string;
+    statut: "en_execution";
+    lots: Array<{
+      numero: string;
+      libelle: string;
+      companyName: string;
+      montantMarcheHt: string;
+      activitesAttendues: string[];
+    }>;
+    avenants: Array<{
+      lotNumero: string;
+      objet: string;
+      montantHt: string;
+      impactDelaiJours: number;
+      dateSignature: Date;
+    }>;
+  }> = [
+    {
+      code: "RC",
+      name: "Résidence Les Cèdres",
+      moaName: "SCI Cèdres Habitat",
+      ville: "Boulogne-Billancourt",
+      codePostal: "92100",
+      dateOs: new Date("2025-09-15"),
+      dateReceptionCible: new Date("2026-11-30"),
+      montantPrevisionnelHt: "2000000",
+      statut: "en_execution",
+      lots: [
+        { numero: "01", libelle: "Gros œuvre", companyName: "SAS Beton+", montantMarcheHt: "524800", activitesAttendues: ["gros_oeuvre", "macconnerie"] },
+        { numero: "02", libelle: "Charpente", companyName: "SARL Dupont", montantMarcheHt: "186400", activitesAttendues: ["charpente_bois"] },
+        { numero: "03", libelle: "Couverture", companyName: "Toits & Co", montantMarcheHt: "144280", activitesAttendues: ["couverture_zinc"] },
+        { numero: "04", libelle: "Menuis. ext.", companyName: "Vitrol Ouest", montantMarcheHt: "272100", activitesAttendues: ["menuiseries_exterieures"] },
+        { numero: "05", libelle: "Plomberie/CVC", companyName: "Thermo Pro", montantMarcheHt: "318940", activitesAttendues: ["plomberie", "cvc"] },
+        { numero: "06", libelle: "Électricité", companyName: "Volt & Co", montantMarcheHt: "213460", activitesAttendues: ["electricite_courant_fort"] },
+        { numero: "07", libelle: "Cloisons/FP", companyName: "Plak Group", montantMarcheHt: "198320", activitesAttendues: ["cloisons"] },
+        { numero: "08", libelle: "Peintures", companyName: "Coloria SARL", montantMarcheHt: "156020", activitesAttendues: ["peintures_interieures"] },
+      ],
+      avenants: [
+        {
+          lotNumero: "01",
+          objet: "Reprise des fondations zone Z3 (étude de sol défavorable)",
+          montantHt: "50000",
+          impactDelaiJours: 21,
+          dateSignature: new Date("2025-12-08"),
+        },
+      ],
+    },
+    {
+      code: "VR",
+      name: "Villa Robineau — Saint-Cloud",
+      moaName: "M. & Mme Robineau",
+      ville: "Saint-Cloud",
+      codePostal: "92210",
+      dateOs: new Date("2025-11-01"),
+      dateReceptionCible: new Date("2026-10-31"),
+      montantPrevisionnelHt: "680000",
+      statut: "en_execution",
+      lots: [
+        { numero: "01", libelle: "Gros œuvre", companyName: "SAS Beton+", montantMarcheHt: "184000", activitesAttendues: ["gros_oeuvre"] },
+        { numero: "02", libelle: "Charpente", companyName: "SARL Dupont", montantMarcheHt: "92000", activitesAttendues: ["charpente_bois"] },
+        { numero: "03", libelle: "Couverture", companyName: "Toits & Co", montantMarcheHt: "78400", activitesAttendues: ["couverture_zinc"] },
+        { numero: "04", libelle: "Menuis. ext.", companyName: "Vitrol Ouest", montantMarcheHt: "108000", activitesAttendues: ["menuiseries_exterieures"] },
+        { numero: "05", libelle: "Électricité", companyName: "Volt & Co", montantMarcheHt: "82000", activitesAttendues: ["electricite_courant_fort"] },
+        { numero: "06", libelle: "Peintures", companyName: "Coloria SARL", montantMarcheHt: "68000", activitesAttendues: ["peintures_interieures"] },
+      ],
+      avenants: [],
+    },
+    {
+      code: "EM",
+      name: "École Marchand — Boulogne",
+      moaName: "Mairie de Boulogne-Billancourt",
+      ville: "Boulogne-Billancourt",
+      codePostal: "92100",
+      dateOs: new Date("2026-03-01"),
+      dateReceptionCible: new Date("2027-08-31"),
+      montantPrevisionnelHt: "3500000",
+      statut: "en_execution",
+      lots: [
+        { numero: "01", libelle: "Gros œuvre", companyName: "SAS Beton+", montantMarcheHt: "620000", activitesAttendues: ["gros_oeuvre", "macconnerie"] },
+        { numero: "02", libelle: "Charpente métallique", companyName: "SARL Dupont", montantMarcheHt: "245000", activitesAttendues: ["charpente_bois"] },
+        { numero: "03", libelle: "Couverture", companyName: "Toits & Co", montantMarcheHt: "180000", activitesAttendues: ["couverture_zinc"] },
+        { numero: "04", libelle: "Menuis. ext.", companyName: "Vitrol Ouest", montantMarcheHt: "320000", activitesAttendues: ["menuiseries_exterieures"] },
+        { numero: "05", libelle: "Plomberie/CVC", companyName: "Thermo Pro", montantMarcheHt: "410000", activitesAttendues: ["plomberie", "cvc"] },
+        { numero: "06", libelle: "Électricité courant fort", companyName: "Volt & Co", montantMarcheHt: "240000", activitesAttendues: ["electricite_courant_fort"] },
+        { numero: "07", libelle: "Cloisons / FP", companyName: "Plak Group", montantMarcheHt: "210000", activitesAttendues: ["cloisons"] },
+        { numero: "08", libelle: "Peintures", companyName: "Coloria SARL", montantMarcheHt: "175000", activitesAttendues: ["peintures_interieures"] },
+        // 6 lots additionnels rattachés à des entreprises existantes.
+        { numero: "09", libelle: "Reprise voirie & VRD", companyName: "SAS Beton+", montantMarcheHt: "160000", activitesAttendues: ["gros_oeuvre"] },
+        { numero: "10", libelle: "Courant faible", companyName: "Volt & Co", montantMarcheHt: "95000", activitesAttendues: ["courant_faible"] },
+        { numero: "11", libelle: "Isolation toiture", companyName: "Toits & Co", montantMarcheHt: "82000", activitesAttendues: ["isolation_toiture"] },
+        { numero: "12", libelle: "Carrelage", companyName: "Coloria SARL", montantMarcheHt: "115000", activitesAttendues: ["peintures_interieures"] },
+        { numero: "13", libelle: "Ventilation cuisine", companyName: "Thermo Pro", montantMarcheHt: "88000", activitesAttendues: ["ventilation"] },
+        { numero: "14", libelle: "Espaces verts cour", companyName: "Coloria SARL", montantMarcheHt: "55000", activitesAttendues: ["peintures_interieures"] },
+      ],
+      avenants: [
+        {
+          lotNumero: "01",
+          objet: "Reprise fondations + dalle locaux techniques",
+          montantHt: "250000",
+          impactDelaiJours: 45,
+          dateSignature: new Date("2026-04-15"),
+        },
+        {
+          lotNumero: "05",
+          objet: "Renforcement CVC après étude énergétique",
+          montantHt: "182000",
+          impactDelaiJours: 30,
+          dateSignature: new Date("2026-04-22"),
+        },
+      ],
+    },
+  ];
+
+  let opCount = 0;
+  let lotCount = 0;
+  let avenantCount = 0;
+  let planningTaskCount = 0;
+  for (const op of OPERATIONS) {
+    const moaRow = moaByName.get(op.moaName);
+    if (!moaRow) throw new Error(`MOA "${op.moaName}" introuvable pour seed`);
+
+    let opRow = await db.query.operations.findFirst({
+      where: and(
+        eq(operations.organizationId, org.id),
+        eq(operations.code, op.code),
+      ),
+    });
+    if (!opRow) {
+      [opRow] = await db
+        .insert(operations)
+        .values({
+          organizationId: org.id,
+          code: op.code,
+          name: op.name,
+          moaId: moaRow.id,
+          ville: op.ville,
+          codePostal: op.codePostal,
+          dateOs: op.dateOs,
+          dateReceptionCible: op.dateReceptionCible,
+          dureePrevueJours: Math.round(
+            (op.dateReceptionCible.getTime() - op.dateOs.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+          montantPrevisionnelHt: op.montantPrevisionnelHt,
+          statut: op.statut,
+        })
+        .returning();
+      opCount += 1;
+
+      // Jalons OS et Réception
+      await db.insert(planningTasks).values({
+        operationId: opRow.id,
+        type: "jalon",
+        libelle: "Ordre de service",
+        dateDebutPrevue: op.dateOs,
+        dateFinPrevue: op.dateOs,
+        milestoneKind: "os",
+      });
+      await db.insert(planningTasks).values({
+        operationId: opRow.id,
+        type: "jalon",
+        libelle: "Réception",
+        dateDebutPrevue: op.dateReceptionCible,
+        dateFinPrevue: op.dateReceptionCible,
+        milestoneKind: "reception",
+      });
+      planningTaskCount += 2;
+    }
+
+    // Lots
+    for (const l of op.lots) {
+      const existingLot = await db.query.lots.findFirst({
+        where: and(eq(lots.operationId, opRow.id), eq(lots.numero, l.numero)),
+      });
+      if (existingLot) continue;
+      const c = companyByName.get(l.companyName);
+      if (!c)
+        throw new Error(`Entreprise "${l.companyName}" introuvable pour seed`);
+      const [lotRow] = await db
+        .insert(lots)
+        .values({
+          operationId: opRow.id,
+          numero: l.numero,
+          libelle: l.libelle,
+          companyId: c.id,
+          montantMarcheHt: l.montantMarcheHt,
+          tauxTva: "20.00",
+          modeRevision: "BT01",
+          retenueGarantiePct: "5.00",
+          delaiPaiementJours: 30,
+          activitesAttendues: l.activitesAttendues,
+          statut: "signe",
+          decennaleCheckAt: new Date(),
+        })
+        .returning();
+      lotCount += 1;
+      // Planning task pour ce lot (dates contractuelles globales — l'user
+      // ajustera ensuite dans le sprint Planning).
+      await db.insert(planningTasks).values({
+        operationId: opRow.id,
+        lotId: lotRow.id,
+        type: "lot",
+        libelle: `Lot ${l.numero} · ${l.libelle}`,
+        dateDebutPrevue: op.dateOs,
+        dateFinPrevue: op.dateReceptionCible,
+        statut: "en_cours",
+      });
+      planningTaskCount += 1;
+    }
+
+    // Avenants
+    for (const a of op.avenants) {
+      // Lookup the lot by numero on this operation.
+      const lot = await db.query.lots.findFirst({
+        where: and(
+          eq(lots.operationId, opRow.id),
+          eq(lots.numero, a.lotNumero),
+        ),
+      });
+      if (!lot) continue;
+      // Check si l'avenant existe déjà (par objet pour idempotence).
+      const existingAv = await db.query.avenants.findFirst({
+        where: and(eq(avenants.lotId, lot.id), eq(avenants.objet, a.objet)),
+      });
+      if (existingAv) continue;
+      // Détermine le prochain numéro.
+      const existing = await db.query.avenants.findMany({
+        where: eq(avenants.lotId, lot.id),
+      });
+      const nextNum =
+        existing.length === 0
+          ? 1
+          : Math.max(...existing.map((e) => e.numero)) + 1;
+      await db.insert(avenants).values({
+        lotId: lot.id,
+        numero: nextNum,
+        objet: a.objet,
+        montantHt: a.montantHt,
+        impactDelaiJours: a.impactDelaiJours,
+        dateSignature: a.dateSignature,
+        statut: "signe",
+      });
+      avenantCount += 1;
+    }
+  }
+  console.log(`✓ Opérations: ${opCount} créées (${OPERATIONS.length} au total)`);
+  console.log(`✓ Lots: ${lotCount} créés`);
+  console.log(`✓ Planning tasks: ${planningTaskCount} créés`);
+  console.log(`✓ Avenants signés: ${avenantCount} créés`);
 
   console.log("✅ Seed terminé !");
 }

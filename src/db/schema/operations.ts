@@ -143,6 +143,8 @@ export const operations = pgTable(
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    /** Soft delete : symétrique à companies / moas. */
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     ...timestamps(),
   },
   (table) => [
@@ -152,6 +154,7 @@ export const operations = pgTable(
     ),
     index("operations_organization_id_idx").on(table.organizationId),
     index("operations_moa_idx").on(table.moaId),
+    index("operations_archived_idx").on(table.organizationId, table.archivedAt),
     check(
       "operations_code_format_ck",
       sql`${table.code} ~ '^[A-Z0-9-]{2,8}$'`,
