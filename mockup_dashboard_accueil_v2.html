@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Architask — Dashboard d'accueil v2 (cards aérées)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-base: #F4F5F7;
+    --surface: #FFFFFF;
+    --surface-2: #EEEFF2;
+    --text-primary: #0B0B0F;
+    --text-secondary: #5F6675;
+    --text-tertiary: #9AA0AB;
+    --brand: #1F2DEA;
+    --brand-soft: #EEF0FF;
+    --mint-100: #DCFCE7;
+    --mint-200: #B8F2D1;
+    --mint-900: #064E2C;
+    --lilac-100: #EDE9FE;
+    --lilac-200: #DDD6FE;
+    --lilac-900: #3B1B7A;
+    --black: #0B0B0F;
+    --success: #16A34A;
+    --warning: #F59E0B;
+    --danger: #DC2626;
+    --info: #0EA5E9;
+    --border: rgba(11,11,15,0.06);
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-2: 0 8px 32px rgba(0,0,0,0.06);
+  }
+  [data-theme="dark"] {
+    --bg-base: #07080A; --surface: #14161B; --surface-2: #1C1E25;
+    --text-primary: #F4F5F7; --text-secondary: #A8AEBC; --text-tertiary: #6C7383;
+    --brand: #4F5DFF; --brand-soft: rgba(79,93,255,0.14); --black: #FFFFFF;
+    --border: rgba(255,255,255,0.06);
+  }
+  html, body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-base); color: var(--text-primary); }
+  .font-tabular { font-variant-numeric: tabular-nums; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 28px; box-shadow: var(--shadow-1); }
+  .card-black { background: var(--black); color: var(--surface); border-radius: 28px; }
+  [data-theme="dark"] .card-black { color: var(--text-primary); }
+  .card-mint { background: linear-gradient(135deg, var(--mint-200) 0%, var(--mint-100) 100%); color: var(--mint-900); border-radius: 28px; }
+  .card-lilac { background: linear-gradient(135deg, var(--lilac-200) 0%, var(--lilac-100) 100%); color: var(--lilac-900); border-radius: 28px; }
+  .num-hero { font-size: 64px; font-weight: 700; letter-spacing: -0.035em; line-height: 0.95; }
+  .num-xl { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .num-md { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .title-hero { font-size: 40px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.05; }
+  .title-md { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .label-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; color: var(--text-tertiary); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill-success { background: rgba(22,163,74,0.10); color: var(--success); }
+  .pill-warning { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .pill-danger { background: rgba(220,38,38,0.10); color: var(--danger); }
+  .pill-info { background: rgba(14,165,233,0.10); color: var(--info); }
+  .pill-neutral { background: var(--surface-2); color: var(--text-secondary); }
+  .btn-dark { background: var(--black); color: var(--surface); padding: 12px 20px; border-radius: 16px; font-weight: 500; font-size: 14px; display:inline-flex; align-items:center; gap:8px; transition: transform 180ms; }
+  .btn-dark:hover { transform: translateY(-1px); }
+  .nav-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:14px; font-size:13px; font-weight:500; color:var(--text-secondary); cursor:pointer; transition: all 120ms; }
+  .nav-item:hover { background: var(--surface-2); color: var(--text-primary); }
+  .nav-item.active { background: var(--black); color: var(--surface); }
+  [data-theme="dark"] .nav-item.active { background: var(--text-primary); color: var(--black); }
+  .nav-pill { margin-left:auto; padding:1px 8px; border-radius:999px; background:var(--surface-2); font-size:10px; font-weight:600; }
+  .nav-section-title { font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-tertiary); padding:0 12px; margin:16px 0 6px; font-weight:600; }
+  .clogo { display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:700; border-radius:12px; flex-shrink:0; }
+  .clogo.sm { width:36px; height:36px; font-size:12px; border-radius:10px; }
+  .clogo.md { width:44px; height:44px; font-size:14px; }
+  .lbg-1 { background: linear-gradient(135deg,#1F2DEA,#4F5DFF); }
+  .lbg-2 { background: linear-gradient(135deg,#DC2626,#F97316); }
+  .lbg-3 { background: linear-gradient(135deg,#16A34A,#10B981); }
+  .lbg-4 { background: linear-gradient(135deg,#F59E0B,#FBBF24); }
+  .lbg-5 { background: linear-gradient(135deg,#0EA5E9,#06B6D4); }
+  .lbg-6 { background: linear-gradient(135deg,#8B5CF6,#A78BFA); }
+  .tooltip-dark { background: var(--black); color: var(--surface); padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .kbd { font-family:'JetBrains Mono',monospace; font-size:11px; padding:2px 7px; border:1px solid rgba(11,11,15,0.12); border-radius:6px; color:var(--text-secondary); background:var(--surface); }
+  .glass { backdrop-filter: blur(20px); background: rgba(244,245,247,0.78); }
+  [data-theme="dark"] .glass { background: rgba(7,8,10,0.78); }
+</style>
+</head>
+<body data-theme="light">
+
+<!-- Barre de contrôle maquette -->
+<div class="glass sticky top-0 z-50 border-b" style="border-color: var(--border);">
+  <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: var(--black);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+      </div>
+      <div class="font-semibold text-[15px]">Architask</div>
+      <span class="pill pill-neutral">Dashboard d'accueil v2 — cards aérées</span>
+    </div>
+    <button onclick="document.body.dataset.theme = document.body.dataset.theme==='dark'?'light':'dark'" class="nav-item">Clair / Sombre</button>
+  </div>
+</div>
+
+<div class="flex max-w-[1600px] mx-auto" style="min-height: calc(100vh - 60px);">
+
+  <!-- Sidebar -->
+  <aside class="w-64 shrink-0 p-5 pt-7 flex flex-col gap-1" style="background: var(--bg-base);">
+    <div class="px-3 py-2 mb-3 flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: var(--black);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+      </div>
+      <div class="font-semibold text-[15px]">Architask</div>
+    </div>
+    <div class="px-3 mb-2">
+      <button class="w-full flex items-center gap-2 px-3 py-2.5 rounded-2xl" style="background: var(--surface);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span class="text-[13px] flex-1 text-left" style="color:var(--text-secondary);">Rechercher…</span>
+        <span class="kbd">⌘K</span>
+      </button>
+    </div>
+    <div class="nav-section-title">Agence</div>
+    <a class="nav-item active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Accueil</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Opérations<span class="nav-pill">14</span></a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Annuaire<span class="nav-pill" style="background:rgba(245,158,11,0.18);color:var(--warning);">2</span></a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Cockpit</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Planning</a>
+    <a class="nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Inbox<span class="nav-pill" style="background:var(--black);color:var(--surface);">7</span></a>
+    <div class="mt-auto pt-4">
+      <div class="flex items-center gap-3 px-3 py-2 rounded-2xl">
+        <div class="clogo md lbg-1">CA</div>
+        <div class="flex-1 min-w-0"><div class="text-[13px] font-semibold">Camille A.</div><div class="text-[11px]" style="color:var(--text-secondary);">Atelier Habria</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 px-10 py-10 min-w-0">
+
+    <!-- Header -->
+    <div class="flex items-end justify-between mb-8">
+      <div>
+        <div class="label-eyebrow mb-2">Mercredi 20 mai 2026</div>
+        <h1 class="title-hero">Bonjour Camille 👋</h1>
+        <p class="text-[15px] mt-2" style="color:var(--text-secondary);">Voici l'essentiel de ton agence aujourd'hui.</p>
+      </div>
+      <button class="btn-dark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nouvelle opération
+      </button>
+    </div>
+
+    <!-- Row 1 : Hero activité + Calendrier échéances -->
+    <div class="grid grid-cols-3 gap-6 mb-6">
+
+      <!-- Hero card Activité du mois (2/3) -->
+      <div class="col-span-2 card p-8 relative overflow-hidden">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <div class="label-eyebrow">Activité financière · Mai 2026</div>
+            <div class="flex items-baseline gap-2 mt-3">
+              <div class="num-hero font-tabular">487</div>
+              <div class="text-[24px] font-semibold text-muted" style="color:var(--text-secondary);">k€ encaissés</div>
+              <span class="pill pill-success ml-2"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>+24% YTD</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 p-1 rounded-2xl" style="background:var(--surface-2);">
+            <button class="px-3 py-1.5 text-[12px] font-semibold rounded-xl" style="background:var(--surface);box-shadow:var(--shadow-1);">Mois</button>
+            <button class="px-3 py-1.5 text-[12px] font-medium rounded-xl" style="color:var(--text-secondary);">Trim.</button>
+            <button class="px-3 py-1.5 text-[12px] font-medium rounded-xl" style="color:var(--text-secondary);">Année</button>
+          </div>
+        </div>
+
+        <!-- Courbe douce dégradée -->
+        <div class="relative mt-4" style="height: 180px;">
+          <svg viewBox="0 0 760 180" class="w-full h-full" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="actGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#1F2DEA" stop-opacity="0.18"/>
+                <stop offset="100%" stop-color="#1F2DEA" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="actLine" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#1F2DEA"/><stop offset="100%" stop-color="#8B5CF6"/>
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="45" x2="760" y2="45" stroke="rgba(0,0,0,0.04)"/>
+            <line x1="0" y1="90" x2="760" y2="90" stroke="rgba(0,0,0,0.04)"/>
+            <line x1="0" y1="135" x2="760" y2="135" stroke="rgba(0,0,0,0.04)"/>
+            <path d="M0,140 C80,130 140,90 220,95 C300,100 340,60 430,55 C520,50 560,80 640,50 C700,30 740,38 760,25 L760,180 L0,180 Z" fill="url(#actGrad)"/>
+            <path d="M0,140 C80,130 140,90 220,95 C300,100 340,60 430,55 C520,50 560,80 640,50 C700,30 740,38 760,25" fill="none" stroke="url(#actLine)" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="640" cy="50" r="6" fill="white" stroke="#1F2DEA" stroke-width="3"/>
+          </svg>
+          <!-- tooltip noir -->
+          <div class="absolute" style="left: 80%; top: 6px; transform: translateX(-50%);">
+            <div class="tooltip-dark">Mai · 487 k€</div>
+          </div>
+        </div>
+
+        <!-- Mini légende 3 chiffres -->
+        <div class="grid grid-cols-3 gap-4 mt-6 pt-6" style="border-top:1px solid var(--border);">
+          <div>
+            <div class="flex items-center gap-2 text-[12px]" style="color:var(--text-secondary);"><span class="w-2.5 h-2.5 rounded-full" style="background:var(--brand);"></span>CP émis</div>
+            <div class="num-md font-tabular mt-1.5">1,24 <span class="text-[14px] text-muted">M€</span></div>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 text-[12px]" style="color:var(--text-secondary);"><span class="w-2.5 h-2.5 rounded-full" style="background:#8B5CF6;"></span>Honoraires facturés</div>
+            <div class="num-md font-tabular mt-1.5">38,4 <span class="text-[14px] text-muted">k€</span></div>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 text-[12px]" style="color:var(--text-secondary);"><span class="w-2.5 h-2.5 rounded-full" style="background:var(--success);"></span>Encaissé</div>
+            <div class="num-md font-tabular mt-1.5">487 <span class="text-[14px] text-muted">k€</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Échéances (calendrier noir) (1/3) -->
+      <div class="card-black p-7">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="title-md">Échéances</h3>
+          <span class="pill" style="background:rgba(255,255,255,0.12);color:white;">7 jours</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex items-start gap-3">
+            <div class="flex flex-col items-center justify-center w-12 h-12 rounded-2xl shrink-0" style="background:rgba(245,158,11,0.18);color:var(--warning);">
+              <div class="text-[15px] font-bold font-tabular leading-none">21</div>
+              <div class="text-[9px] uppercase">mai</div>
+            </div>
+            <div class="flex-1 min-w-0 pt-0.5">
+              <div class="text-[13px] font-semibold">Réunion chantier hebdo</div>
+              <div class="text-[11px]" style="color:rgba(255,255,255,0.55);">Résidence Les Cèdres · 14h</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="flex flex-col items-center justify-center w-12 h-12 rounded-2xl shrink-0" style="background:rgba(14,165,233,0.18);color:#38BDF8;">
+              <div class="text-[15px] font-bold font-tabular leading-none">23</div>
+              <div class="text-[9px] uppercase">mai</div>
+            </div>
+            <div class="flex-1 min-w-0 pt-0.5">
+              <div class="text-[13px] font-semibold">Réception OPR</div>
+              <div class="text-[11px]" style="color:rgba(255,255,255,0.55);">Réhab Saint-Martin · 10h</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="flex flex-col items-center justify-center w-12 h-12 rounded-2xl shrink-0" style="background:rgba(22,163,74,0.18);color:var(--mint-200);">
+              <div class="text-[15px] font-bold font-tabular leading-none">26</div>
+              <div class="text-[9px] uppercase">mai</div>
+            </div>
+            <div class="flex-1 min-w-0 pt-0.5">
+              <div class="text-[13px] font-semibold">Échéance paiement CP</div>
+              <div class="text-[11px] font-tabular" style="color:rgba(255,255,255,0.55);">Villa Robineau · 86 320 €</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="flex flex-col items-center justify-center w-12 h-12 rounded-2xl shrink-0" style="background:rgba(139,92,246,0.20);color:#C4B5FD;">
+              <div class="text-[15px] font-bold font-tabular leading-none">28</div>
+              <div class="text-[9px] uppercase">mai</div>
+            </div>
+            <div class="flex-1 min-w-0 pt-0.5">
+              <div class="text-[13px] font-semibold">Libération retenue</div>
+              <div class="text-[11px] font-tabular" style="color:rgba(255,255,255,0.55);">Logements Verdier · 24 800 €</div>
+            </div>
+          </div>
+        </div>
+        <button class="w-full mt-5 py-2.5 rounded-2xl text-[12px] font-semibold" style="background:rgba(255,255,255,0.10);">Voir le planning complet →</button>
+      </div>
+    </div>
+
+    <!-- Row 2 : À faire + Portefeuille + Chantiers actifs -->
+    <div class="grid grid-cols-3 gap-6">
+
+      <!-- Colonne gauche : À faire (jauge) + Portefeuille -->
+      <div class="space-y-6">
+        <!-- À faire -->
+        <div class="card p-7">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="title-md">À faire</h3>
+            <span class="pill pill-warning">Action</span>
+          </div>
+          <div class="flex items-center gap-5 mt-4">
+            <!-- jauge circulaire -->
+            <div class="relative" style="width:96px;height:96px;">
+              <svg width="96" height="96" viewBox="0 0 36 36" class="-rotate-90">
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--surface-2)" stroke-width="4"/>
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--brand)" stroke-width="4" stroke-linecap="round" stroke-dasharray="58 97.4" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <div class="num-md font-tabular">7</div>
+                <div class="text-[10px]" style="color:var(--text-tertiary);">tâches</div>
+              </div>
+            </div>
+            <div class="flex-1 space-y-2 text-[12px]">
+              <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full" style="background:var(--danger);"></span>3 CP à signer</div>
+              <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full" style="background:var(--info);"></span>1 DGD à finaliser</div>
+              <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full" style="background:var(--warning);"></span>2 décennales -60j</div>
+              <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full" style="background:var(--success);"></span>1 retenue à libérer</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Portefeuille (mint) -->
+        <div class="card-mint p-7">
+          <div class="label-eyebrow" style="color:rgba(6,78,44,0.55);">Portefeuille en cours</div>
+          <div class="flex items-baseline gap-1 mt-3">
+            <div class="num-xl font-tabular">4,82</div>
+            <div class="text-[20px] font-semibold ml-1">M€</div>
+          </div>
+          <div class="text-[12px] mt-2" style="color:rgba(6,78,44,0.65);">14 chantiers actifs · avancement moyen 58%</div>
+          <div class="h-2 rounded-full mt-4 overflow-hidden" style="background:rgba(255,255,255,0.45);">
+            <div class="h-full rounded-full" style="width:58%;background:var(--mint-900);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chantiers actifs (2/3) -->
+      <div class="col-span-2 card overflow-hidden">
+        <div class="px-7 py-5 flex items-center justify-between">
+          <div>
+            <h3 class="title-md">Chantiers actifs</h3>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-tertiary);">14 opérations · triées par activité</p>
+          </div>
+          <button class="text-[12px] font-medium" style="color:var(--brand);">Tout voir →</button>
+        </div>
+        <div class="divide-y" style="border-color:var(--border);">
+          <div class="px-7 py-4 flex items-center gap-4 hover:bg-[var(--surface-2)] cursor-pointer transition-colors">
+            <div class="clogo md lbg-2">RC</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[14px] font-semibold truncate">Résidence Les Cèdres</div>
+              <div class="text-[12px]" style="color:var(--text-secondary);">SCI Cèdres Habitat · 8 lots</div>
+            </div>
+            <div class="w-32">
+              <div class="flex items-center justify-between text-[11px] mb-1.5"><span style="color:var(--text-tertiary);">Avancement</span><span class="font-bold font-tabular">62%</span></div>
+              <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--surface-2);"><div class="h-full rounded-full" style="width:62%;background:linear-gradient(90deg,var(--brand),#8B5CF6);"></div></div>
+            </div>
+            <span class="pill pill-success">à jour</span>
+          </div>
+          <div class="px-7 py-4 flex items-center gap-4 hover:bg-[var(--surface-2)] cursor-pointer transition-colors">
+            <div class="clogo md lbg-5">VR</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[14px] font-semibold truncate">Villa Robineau</div>
+              <div class="text-[12px]" style="color:var(--text-secondary);">M. & Mme Robineau · 6 lots</div>
+            </div>
+            <div class="w-32">
+              <div class="flex items-center justify-between text-[11px] mb-1.5"><span style="color:var(--text-tertiary);">Avancement</span><span class="font-bold font-tabular">38%</span></div>
+              <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--surface-2);"><div class="h-full rounded-full" style="width:38%;background:linear-gradient(90deg,var(--brand),#8B5CF6);"></div></div>
+            </div>
+            <span class="pill pill-warning">CP attente</span>
+          </div>
+          <div class="px-7 py-4 flex items-center gap-4 hover:bg-[var(--surface-2)] cursor-pointer transition-colors">
+            <div class="clogo md lbg-3">RS</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[14px] font-semibold truncate">Réhabilitation Saint-Martin</div>
+              <div class="text-[12px]" style="color:var(--text-secondary);">Ville de Saint-Cloud · 12 lots</div>
+            </div>
+            <div class="w-32">
+              <div class="flex items-center justify-between text-[11px] mb-1.5"><span style="color:var(--text-tertiary);">Avancement</span><span class="font-bold font-tabular" style="color:var(--success);">96%</span></div>
+              <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--surface-2);"><div class="h-full rounded-full" style="width:96%;background:linear-gradient(90deg,#16A34A,#10B981);"></div></div>
+            </div>
+            <span class="pill pill-info">OPR</span>
+          </div>
+          <div class="px-7 py-4 flex items-center gap-4 hover:bg-[var(--surface-2)] cursor-pointer transition-colors">
+            <div class="clogo md lbg-6">EM</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[14px] font-semibold truncate">École Marchand</div>
+              <div class="text-[12px]" style="color:var(--text-secondary);">Mairie de Boulogne · 14 lots</div>
+            </div>
+            <div class="w-32">
+              <div class="flex items-center justify-between text-[11px] mb-1.5"><span style="color:var(--text-tertiary);">Avancement</span><span class="font-bold font-tabular">24%</span></div>
+              <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--surface-2);"><div class="h-full rounded-full" style="width:24%;background:linear-gradient(90deg,#DC2626,#F97316);"></div></div>
+            </div>
+            <span class="pill pill-danger">Avenants 14%</span>
+          </div>
+          <div class="px-7 py-4 flex items-center gap-4 hover:bg-[var(--surface-2)] cursor-pointer transition-colors">
+            <div class="clogo md lbg-4">CC</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[14px] font-semibold truncate">Crèche Cousteau</div>
+              <div class="text-[12px]" style="color:var(--text-secondary);">Mairie d'Asnières · 7 lots</div>
+            </div>
+            <div class="w-32">
+              <div class="flex items-center justify-between text-[11px] mb-1.5"><span style="color:var(--text-tertiary);">Avancement</span><span class="font-bold font-tabular" style="color:var(--success);">100%</span></div>
+              <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--mint-100);"><div class="h-full rounded-full" style="width:100%;background:linear-gradient(90deg,#16A34A,#10B981);"></div></div>
+            </div>
+            <span class="pill pill-success">DGD</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bandeau alerte décennale -->
+    <div class="card p-6 flex items-center gap-5 mt-6" style="border-left:4px solid var(--warning);">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center" style="background:rgba(245,158,11,0.12);color:var(--warning);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="flex-1">
+        <div class="font-semibold text-[15px]">2 décennales expirent dans moins de 60 jours</div>
+        <div class="text-[13px] mt-1" style="color:var(--text-secondary);">SAS Beton+ (26/06) · SARL Dupont (10/07) — à relancer pour renouvellement</div>
+      </div>
+      <button class="btn-dark" style="background:var(--surface);color:var(--text-primary);border:1px solid var(--border);">Voir l'annuaire →</button>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
