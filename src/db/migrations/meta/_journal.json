@@ -50,6 +50,13 @@
       "when": 1779224111456,
       "tag": "0006_familiar_piledriver",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779265490384,
+      "tag": "0007_overrated_sauron",
+      "breakpoints": true
     }
   ]
 }

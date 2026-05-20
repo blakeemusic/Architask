@@ -76,6 +76,10 @@ export const honoraireContracts = pgTable(
     statut: honoraireContractStatusEnum("statut")
       .notNull()
       .default("brouillon"),
+    signedAt: timestamp("signed_at", { withTimezone: true, mode: "date" }),
+    signedByUserId: uuid("signed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -186,6 +190,10 @@ export const honoraireSituations = pgTable(
     }),
     sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
+    signedAt: timestamp("signed_at", { withTimezone: true, mode: "date" }),
+    signedByUserId: uuid("signed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),

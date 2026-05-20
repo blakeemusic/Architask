@@ -51,6 +51,13 @@ import {
   pvReceptions,
   retentions,
 } from "./schema/operations";
+import {
+  honoraireContracts,
+  honoraireMissions,
+  honoraireSituations,
+} from "./schema/honoraires";
+import { cockpitAccessGrants } from "./schema/permissions";
+import { nextNHNumber } from "../lib/validation/numbering";
 
 // ---------------------------------------------------------------
 // Helpers
@@ -1298,7 +1305,290 @@ async function seed() {
   }
   console.log("✓ Logements Verdier: 1 op clôturée + retention libérée");
 
+  // 10. Sprint 7 — Honoraires sur RC (contrat signé + 3 situations) +
+  //     EM (contrat brouillon avec missions) + Nathalie L. avec grant global.
+  await seedHonoraires(org.id, ownerUserId);
+
   console.log("✅ Seed terminé !");
+}
+
+// ============================================================
+// Sprint 7 — Cockpit Honoraires
+// ============================================================
+
+async function seedHonoraires(orgId: string, ownerUserId: string) {
+  // Trouve RC + EM
+  const rcOp = await db.query.operations.findFirst({
+    where: and(eq(operations.organizationId, orgId), eq(operations.code, "RC")),
+    with: { moa: { columns: { id: true } } },
+  });
+  const emOp = await db.query.operations.findFirst({
+    where: and(eq(operations.organizationId, orgId), eq(operations.code, "EM")),
+    with: { moa: { columns: { id: true } } },
+  });
+
+  // ---- RC : contrat signé + 6 missions + 3 situations ----
+  if (rcOp) {
+    const existing = await db.query.honoraireContracts.findFirst({
+      where: eq(honoraireContracts.operationId, rcOp.id),
+    });
+    let rcContract = existing;
+    if (!rcContract) {
+      const dateSig = new Date();
+      dateSig.setMonth(dateSig.getMonth() - 8);
+      [rcContract] = await db
+        .insert(honoraireContracts)
+        .values({
+          operationId: rcOp.id,
+          moaId: rcOp.moaId ?? null,
+          modeFacturation: "forfait",
+          montantTotalHt: "96000.00",
+          tauxTva: "20.00",
+          delaiPaiementJours: 30,
+          marcheReferenceHt: "612400.00",
+          dateSignature: dateSig,
+          statut: "en_execution",
+          signedAt: dateSig,
+          signedByUserId: ownerUserId,
+          createdBy: ownerUserId,
+        })
+        .returning();
+    }
+    if (!rcContract) throw new Error("RC contract introuvable");
+
+    const RC_MISSIONS: Array<{
+      ordre: number;
+      libelle: string;
+      pct: string;
+      avancement: string;
+    }> = [
+      { ordre: 1, libelle: "Esquisse (ESQ)", pct: "8.00", avancement: "100.00" },
+      { ordre: 2, libelle: "APS · Avant-projet sommaire", pct: "12.00", avancement: "100.00" },
+      { ordre: 3, libelle: "APD · Avant-projet définitif", pct: "18.00", avancement: "75.00" },
+      { ordre: 4, libelle: "PRO · Études de projet", pct: "22.00", avancement: "0.00" },
+      { ordre: 5, libelle: "ACT · Assistance contrats trav.", pct: "15.00", avancement: "0.00" },
+      { ordre: 6, libelle: "DET · Direction de chantier", pct: "25.00", avancement: "0.00" },
+    ];
+    let rcMissionCount = 0;
+    const rcMissionsByLibelle = new Map<string, string>();
+    for (const m of RC_MISSIONS) {
+      const exMission = await db.query.honoraireMissions.findFirst({
+        where: and(
+          eq(honoraireMissions.contractId, rcContract.id),
+          eq(honoraireMissions.ordre, m.ordre),
+        ),
+      });
+      if (exMission) {
+        rcMissionsByLibelle.set(m.libelle, exMission.id);
+        continue;
+      }
+      const montantCalcule = ((Number(m.pct) / 100) * 96000).toFixed(2);
+      const [row] = await db
+        .insert(honoraireMissions)
+        .values({
+          contractId: rcContract.id,
+          libelle: m.libelle,
+          ordre: m.ordre,
+          typeValeur: "pct",
+          pctDuTotal: m.pct,
+          montantCalcule,
+          pctAvancementCourant: m.avancement,
+        })
+        .returning();
+      rcMissionsByLibelle.set(m.libelle, row.id);
+      rcMissionCount += 1;
+    }
+
+    // 3 situations
+    const situationsToCreate: Array<{
+      missionLibelle: string;
+      pctNouveau: string;
+      pctPrec: string;
+      statut: "payee" | "signee";
+      dateEmission: Date;
+      paid?: boolean;
+    }> = [
+      {
+        missionLibelle: "Esquisse (ESQ)",
+        pctNouveau: "100.00",
+        pctPrec: "0.00",
+        statut: "payee",
+        dateEmission: new Date(new Date().setMonth(new Date().getMonth() - 7)),
+      },
+      {
+        missionLibelle: "APS · Avant-projet sommaire",
+        pctNouveau: "100.00",
+        pctPrec: "0.00",
+        statut: "payee",
+        dateEmission: new Date(new Date().setMonth(new Date().getMonth() - 4)),
+      },
+      {
+        missionLibelle: "APD · Avant-projet définitif",
+        pctNouveau: "75.00",
+        pctPrec: "0.00",
+        statut: "signee",
+        dateEmission: new Date(new Date().setDate(new Date().getDate() - 8)),
+      },
+    ];
+    let rcSitCount = 0;
+    for (const s of situationsToCreate) {
+      const missionId = rcMissionsByLibelle.get(s.missionLibelle);
+      if (!missionId) continue;
+      const exSit = await db.query.honoraireSituations.findFirst({
+        where: and(
+          eq(honoraireSituations.contractId, rcContract.id),
+          eq(honoraireSituations.missionId, missionId),
+        ),
+      });
+      if (exSit) continue;
+
+      const pctMission = Number(
+        RC_MISSIONS.find((m) => m.libelle === s.missionLibelle)?.pct ?? "0",
+      );
+      const montantMissionHt = (pctMission / 100) * 96000;
+      const delta = Number(s.pctNouveau) - Number(s.pctPrec);
+      const montantHt = (delta / 100) * montantMissionHt;
+      const montantTva = montantHt * 0.2;
+      const montantTtc = montantHt + montantTva;
+
+      const numbering = await nextNHNumber({
+        organizationId: orgId,
+        operationCode: "RC",
+        operationId: rcOp.id,
+        year: s.dateEmission.getFullYear(),
+      });
+
+      const signedAt = new Date(s.dateEmission);
+      signedAt.setDate(signedAt.getDate() + 2);
+      const sentAt = new Date(signedAt);
+      sentAt.setDate(sentAt.getDate() + 1);
+      const paidAt = s.statut === "payee" ? new Date(sentAt) : null;
+      if (paidAt) paidAt.setDate(paidAt.getDate() + 14);
+
+      await db.insert(honoraireSituations).values({
+        contractId: rcContract.id,
+        missionId,
+        numero: numbering.numero,
+        dateEmission: s.dateEmission,
+        pctAvancementPrecedent: s.pctPrec,
+        pctAvancementNouveau: s.pctNouveau,
+        montantHt: montantHt.toFixed(2),
+        montantTva: montantTva.toFixed(2),
+        montantTtc: montantTtc.toFixed(2),
+        statut: s.statut,
+        signedAt,
+        signedByUserId: ownerUserId,
+        sentAt: s.statut !== "signee" ? sentAt : sentAt,
+        paidAt: paidAt ?? null,
+        createdBy: ownerUserId,
+      });
+      rcSitCount += 1;
+    }
+    console.log(
+      `✓ Honoraires RC: contrat signé, ${rcMissionCount} missions, ${rcSitCount} situations`,
+    );
+  }
+
+  // ---- EM : contrat brouillon + 6 missions saisies, pas signé ----
+  if (emOp) {
+    const existing = await db.query.honoraireContracts.findFirst({
+      where: eq(honoraireContracts.operationId, emOp.id),
+    });
+    let emContract = existing;
+    if (!emContract) {
+      [emContract] = await db
+        .insert(honoraireContracts)
+        .values({
+          operationId: emOp.id,
+          moaId: emOp.moaId ?? null,
+          modeFacturation: "forfait",
+          montantTotalHt: "278400.00",
+          tauxTva: "20.00",
+          delaiPaiementJours: 30,
+          marcheReferenceHt: "3500000.00",
+          statut: "brouillon",
+          createdBy: ownerUserId,
+        })
+        .returning();
+    }
+    if (!emContract) throw new Error("EM contract introuvable");
+
+    const EM_MISSIONS: Array<{
+      ordre: number;
+      libelle: string;
+      pct: string;
+    }> = [
+      { ordre: 1, libelle: "ESQ · Esquisse", pct: "7.00" },
+      { ordre: 2, libelle: "APS · Avant-projet sommaire", pct: "10.00" },
+      { ordre: 3, libelle: "APD · Avant-projet définitif", pct: "20.00" },
+      { ordre: 4, libelle: "PRO · Études de projet", pct: "23.00" },
+      { ordre: 5, libelle: "ACT · Assistance contrats trav.", pct: "15.00" },
+      { ordre: 6, libelle: "DET · Direction de chantier", pct: "25.00" },
+    ];
+    let emMissionCount = 0;
+    for (const m of EM_MISSIONS) {
+      const exMission = await db.query.honoraireMissions.findFirst({
+        where: and(
+          eq(honoraireMissions.contractId, emContract.id),
+          eq(honoraireMissions.ordre, m.ordre),
+        ),
+      });
+      if (exMission) continue;
+      const montantCalcule = ((Number(m.pct) / 100) * 278400).toFixed(2);
+      await db.insert(honoraireMissions).values({
+        contractId: emContract.id,
+        libelle: m.libelle,
+        ordre: m.ordre,
+        typeValeur: "pct",
+        pctDuTotal: m.pct,
+        montantCalcule,
+        pctAvancementCourant: "0.00",
+      });
+      emMissionCount += 1;
+    }
+    console.log(
+      `✓ Honoraires EM: contrat brouillon, ${emMissionCount} missions saisies`,
+    );
+  }
+
+  // ---- Nathalie L. (member) avec CockpitAccessGrant scope=global ----
+  const NATHALIE_CLERK_ID = "seed_user_nathalie_l";
+  let nathalie = await db.query.users.findFirst({
+    where: eq(users.clerkUserId, NATHALIE_CLERK_ID),
+  });
+  if (!nathalie) {
+    [nathalie] = await db
+      .insert(users)
+      .values({
+        clerkUserId: NATHALIE_CLERK_ID,
+        organizationId: orgId,
+        email: "nathalie.l@atelier-habria.fr",
+        name: "Nathalie Lemoine",
+        role: "member",
+      })
+      .returning();
+  }
+  if (nathalie) {
+    const exGrant = await db.query.cockpitAccessGrants.findFirst({
+      where: and(
+        eq(cockpitAccessGrants.organizationId, orgId),
+        eq(cockpitAccessGrants.userId, nathalie.id),
+        eq(cockpitAccessGrants.scope, "global"),
+      ),
+    });
+    if (!exGrant) {
+      await db.insert(cockpitAccessGrants).values({
+        organizationId: orgId,
+        userId: nathalie.id,
+        scope: "global",
+        operationId: null,
+        grantedByUserId: ownerUserId,
+      });
+    }
+  }
+  console.log(
+    `✓ Nathalie L. (member) avec grant Cockpit scope=global`,
+  );
 }
 
 seed()
