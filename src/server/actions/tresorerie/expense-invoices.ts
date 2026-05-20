@@ -520,7 +520,10 @@ export async function computeVatSummary(
       });
     }
 
-    revalidatePath("/cockpit/rapprochement");
+    // Pas de revalidatePath ici : computeVatSummary est appelée pendant le
+    // render du Server Component /cockpit/rapprochement, et Next.js interdit
+    // l'invalidation de cache pendant un render. Le upsert du snapshot
+    // suffit ; les lectures ré-exécutent la query à chaque visite.
     return ok({
       tvaCollectee: tvaCollectee.toFixed(2),
       tvaDeductible: tvaDeductible.toFixed(2),
