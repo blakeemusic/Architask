@@ -149,13 +149,6 @@ export function HeroBalanceCard({
       {/* Sparkline 30j */}
       <Sparkline points={sparkline} />
 
-      <style jsx>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-
       <div
         className="absolute w-72 h-72 rounded-full pointer-events-none"
         style={{

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 
@@ -50,12 +51,16 @@ export default function RootLayout({
         className={`${inter.variable}`}
         suppressHydrationWarning
       >
-        <head>
-          {/* Restaure le theme depuis localStorage avant le premier paint
-              pour éviter le flash blanc en dark mode. */}
-          <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-        </head>
         <body className="min-h-screen font-sans antialiased">
+          {/* Restaure le theme depuis localStorage avant le premier paint
+              pour éviter le flash blanc en dark mode. next/script
+              `beforeInteractive` est la voie supportée par Next 16 / React
+              19 (un <script> JSX brut produit une erreur d'hydratation). */}
+          <Script
+            id="theme-init"
+            strategy="beforeInteractive"
+            dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+          />
           {children}
           <Toaster
             position="bottom-right"
