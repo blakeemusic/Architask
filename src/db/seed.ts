@@ -61,7 +61,10 @@ import {
   bankAccounts,
   bankTransactions,
   einvoiceConfigurations,
+  einvoiceEvents,
+  expenseInvoices,
   recurringCharges,
+  vatSummaries,
 } from "./schema/tresorerie";
 import { MockBankProvider, MOCK_BANK_ACCOUNT_IDS } from "../lib/bank/mock-provider";
 import { nextNHNumber } from "../lib/validation/numbering";
@@ -1781,6 +1784,134 @@ async function seedTresorerie(orgId: string) {
   console.log(
     `✓ Trésorerie: ${accountsCreated} comptes connectés, ${txCount} transactions, ${autoReconciled} NH rapprochées auto, ${chargeCount} charges récurrentes${existingConfig ? "" : " · PDP Pennylane configurée"}`,
   );
+
+  // --------- Sprint 8 partie 2 — Rapprochement, expenses, einvoice ---------
+
+  // Quelques expense_invoices (certaines rapprochées sur transactions, d'autres
+  // qui restent à orphelines pour alimenter l'inbox)
+  const txsForInvoices = await db.query.bankTransactions.findMany({
+    where: inArray(
+      bankTransactions.bankAccountId,
+      [...accountByExternal.values()].map((a) => a.id),
+    ),
+  });
+  // 1. Rattacher la transaction Castorama récente (achat fournitures 240€)
+  const txCastorama = txsForInvoices.find((t) =>
+    /castorama/i.test(t.libelle),
+  );
+  if (txCastorama) {
+    const existing = await db.query.expenseInvoices.findFirst({
+      where: and(
+        eq(expenseInvoices.organizationId, orgId),
+        eq(expenseInvoices.linkedTransactionId, txCastorama.id),
+      ),
+    });
+    if (!existing) {
+      await db.insert(expenseInvoices).values({
+        organizationId: orgId,
+        supplierName: "Castorama Boulogne",
+        dateFacture: txCastorama.transactionDate,
+        montantHt: "200.00",
+        montantTva: "40.00",
+        montantTtc: "240.00",
+        tauxTva: "20.00",
+        deductible: true,
+        source: "pennylane",
+        pennylaneExternalId: "pen-rcv-castorama-001",
+        linkedTransactionId: txCastorama.id,
+      });
+      // Marque la tx comme ayant une facture attachée
+      await db
+        .update(bankTransactions)
+        .set({ invoiceAttachedAt: new Date(), needsReconciliation: false })
+        .where(eq(bankTransactions.id, txCastorama.id));
+    }
+  }
+
+  // 2. Rattacher l'Esso carburant -72.10 du mois précédent (déjà catégorisé véhicules)
+  const txEsso = txsForInvoices.find((t) => /esso/i.test(t.libelle));
+  if (txEsso) {
+    const existing = await db.query.expenseInvoices.findFirst({
+      where: and(
+        eq(expenseInvoices.organizationId, orgId),
+        eq(expenseInvoices.linkedTransactionId, txEsso.id),
+      ),
+    });
+    if (!existing) {
+      const ttc = Math.abs(Number(txEsso.amountTtc ?? "72.10"));
+      const ht = ttc / 1.2;
+      const tva = ttc - ht;
+      await db.insert(expenseInvoices).values({
+        organizationId: orgId,
+        supplierName: "Esso Boulogne",
+        dateFacture: txEsso.transactionDate,
+        montantHt: ht.toFixed(2),
+        montantTva: tva.toFixed(2),
+        montantTtc: ttc.toFixed(2),
+        tauxTva: "20.00",
+        deductible: true,
+        source: "photo",
+        ocrConfidence: 94,
+        linkedTransactionId: txEsso.id,
+      });
+      await db
+        .update(bankTransactions)
+        .set({ invoiceAttachedAt: new Date(), needsReconciliation: false })
+        .where(eq(bankTransactions.id, txEsso.id));
+    }
+  }
+
+  // 3. VAT summary mois courant
+  const today2 = new Date();
+  const periodeAnnee = today2.getFullYear();
+  const periodeMois = today2.getMonth() + 1;
+  const existingVat = await db.query.vatSummaries.findFirst({
+    where: and(
+      eq(vatSummaries.organizationId, orgId),
+      eq(vatSummaries.periodeAnnee, periodeAnnee),
+      eq(vatSummaries.periodeMois, periodeMois),
+    ),
+  });
+  if (!existingVat) {
+    await db.insert(vatSummaries).values({
+      organizationId: orgId,
+      periodeAnnee,
+      periodeMois,
+      tvaCollectee: "11000.00",
+      tvaDeductible: "4168.00",
+      tvaDue: "6832.00",
+      statut: "brouillon",
+    });
+  }
+
+  // 4. einvoice_events pour les 3 NH déjà émises (RC-001/002/003)
+  const nhRefs = ["NH-RC-2026-001", "NH-RC-2026-002", "NH-RC-2026-003"];
+  for (const numero of nhRefs) {
+    const sit = await db.query.honoraireSituations.findFirst({
+      where: eq(honoraireSituations.numero, numero),
+    });
+    if (!sit) continue;
+    const existing = await db.query.einvoiceEvents.findFirst({
+      where: eq(einvoiceEvents.honoraireSituationId, sit.id),
+    });
+    if (existing) continue;
+    const occurredAt = new Date(sit.dateEmission);
+    occurredAt.setDate(occurredAt.getDate() + 1);
+    const status = sit.statut === "payee" ? "payee" : "transmise";
+    await db.insert(einvoiceEvents).values({
+      honoraireSituationId: sit.id,
+      direction: "out",
+      status,
+      occurredAt,
+      rawPayload: {
+        externalId: `pen-out-${numero}`,
+        provider: "pennylane",
+        numero,
+      },
+    });
+  }
+
+  console.log("✓ Expenses + VAT + einvoice events");
 }
 
 seed()
