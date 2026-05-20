@@ -23,7 +23,7 @@
  * "adopter" l'org seed.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "./index";
 import {
@@ -57,6 +57,13 @@ import {
   honoraireSituations,
 } from "./schema/honoraires";
 import { cockpitAccessGrants } from "./schema/permissions";
+import {
+  bankAccounts,
+  bankTransactions,
+  einvoiceConfigurations,
+  recurringCharges,
+} from "./schema/tresorerie";
+import { MockBankProvider, MOCK_BANK_ACCOUNT_IDS } from "../lib/bank/mock-provider";
 import { nextNHNumber } from "../lib/validation/numbering";
 
 // ---------------------------------------------------------------
@@ -1309,6 +1316,10 @@ async function seed() {
   //     EM (contrat brouillon avec missions) + Nathalie L. avec grant global.
   await seedHonoraires(org.id, ownerUserId);
 
+  // 11. Sprint 8 — Trésorerie : 2 comptes bancaires + 3 mois de transactions
+  //     + 6 charges récurrentes via MockBankProvider.
+  await seedTresorerie(org.id);
+
   console.log("✅ Seed terminé !");
 }
 
@@ -1588,6 +1599,187 @@ async function seedHonoraires(orgId: string, ownerUserId: string) {
   }
   console.log(
     `✓ Nathalie L. (member) avec grant Cockpit scope=global`,
+  );
+}
+
+// ============================================================
+// Sprint 8 — Cockpit Trésorerie
+// ============================================================
+
+async function seedTresorerie(orgId: string) {
+  // 2 comptes via MockBankProvider (idempotent par externalAccountId)
+  const { accounts } = await MockBankProvider.connectAccount({
+    organizationId: orgId,
+  });
+  const accountByExternal = new Map<string, typeof bankAccounts.$inferSelect>();
+  let accountsCreated = 0;
+  for (const a of accounts) {
+    const existing = await db.query.bankAccounts.findFirst({
+      where: and(
+        eq(bankAccounts.organizationId, orgId),
+        eq(bankAccounts.externalAccountId, a.externalAccountId),
+      ),
+    });
+    if (existing) {
+      accountByExternal.set(a.externalAccountId, existing);
+      continue;
+    }
+    const [row] = await db
+      .insert(bankAccounts)
+      .values({
+        organizationId: orgId,
+        provider: "bridge",
+        externalAccountId: a.externalAccountId,
+        libelle: a.libelle,
+        ibanLast4: a.ibanLast4 ?? null,
+        currency: a.currency,
+        currentBalance: a.currentBalance,
+        lastSyncedAt: new Date(),
+      })
+      .returning();
+    accountByExternal.set(a.externalAccountId, row);
+    accountsCreated += 1;
+  }
+
+  // Transactions sur 3 mois
+  let txCount = 0;
+  for (const [externalId, accountRow] of accountByExternal.entries()) {
+    const { transactions } = await MockBankProvider.syncTransactions({
+      organizationId: orgId,
+      externalAccountId: externalId,
+    });
+    for (const t of transactions) {
+      const inserted = await db
+        .insert(bankTransactions)
+        .values({
+          bankAccountId: accountRow.id,
+          externalTxId: t.externalTxId,
+          transactionDate: t.transactionDate,
+          amountTtc: t.amountTtc,
+          libelle: t.libelle,
+          category: t.category,
+          needsReconciliation: Number(t.amountTtc) > 0 ? false : true,
+          source: "bank",
+        })
+        .onConflictDoNothing({
+          target: [bankTransactions.bankAccountId, bankTransactions.externalTxId],
+          where: sql`${bankTransactions.externalTxId} IS NOT NULL`,
+        })
+        .returning();
+      if (inserted.length > 0) txCount += 1;
+    }
+  }
+
+  // Réconciliation auto NH ↔ transactions entrantes (regex sur libellé)
+  const NH_REGEX = /\b(NH-[A-Z]+-\d{4}-\d{3})\b/;
+  const newTxs = await db.query.bankTransactions.findMany({
+    where: inArray(
+      bankTransactions.bankAccountId,
+      [...accountByExternal.values()].map((a) => a.id),
+    ),
+  });
+  let autoReconciled = 0;
+  for (const tx of newTxs) {
+    if (Number(tx.amountTtc ?? 0) <= 0) continue;
+    if (tx.linkedHonoraireSituationId) continue;
+    const m = NH_REGEX.exec(tx.libelle);
+    if (!m) continue;
+    const numero = m[1];
+    const sit = await db.query.honoraireSituations.findFirst({
+      where: eq(honoraireSituations.numero, numero),
+    });
+    if (!sit) continue;
+    if (sit.statut === "payee") {
+      // déjà payée mais on la lie quand même
+      await db
+        .update(bankTransactions)
+        .set({
+          linkedHonoraireSituationId: sit.id,
+          needsReconciliation: false,
+          category: "honoraires",
+          updatedAt: new Date(),
+        })
+        .where(eq(bankTransactions.id, tx.id));
+      autoReconciled += 1;
+      continue;
+    }
+    await db
+      .update(bankTransactions)
+      .set({
+        linkedHonoraireSituationId: sit.id,
+        needsReconciliation: false,
+        category: "honoraires",
+        updatedAt: new Date(),
+      })
+      .where(eq(bankTransactions.id, tx.id));
+    await db
+      .update(honoraireSituations)
+      .set({
+        statut: "payee",
+        paidAt: tx.transactionDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(honoraireSituations.id, sit.id));
+    autoReconciled += 1;
+  }
+
+  // 6 charges récurrentes
+  const RECURRING: Array<{
+    libelle: string;
+    category: string;
+    montantHt: string;
+    tauxTva: string;
+    recurrence: "monthly" | "quarterly" | "yearly";
+  }> = [
+    { libelle: "Salaires (5 collaborateurs)", category: "salaires", montantHt: "14280.00", tauxTva: "0.00", recurrence: "monthly" },
+    { libelle: "Loyer bureau · SCI Lemoine", category: "loyer_bureau", montantHt: "2850.00", tauxTva: "20.00", recurrence: "monthly" },
+    { libelle: "Leasing véhicules (Arval) + carburant", category: "vehicules", montantHt: "1460.00", tauxTva: "20.00", recurrence: "monthly" },
+    { libelle: "Logiciels & abonnements (Revit, Slack, …)", category: "logiciels", montantHt: "1240.00", tauxTva: "20.00", recurrence: "monthly" },
+    { libelle: "Téléphonie + Internet (Free Pro)", category: "telecom", montantHt: "179.00", tauxTva: "20.00", recurrence: "monthly" },
+    { libelle: "Assurance RCP + décennale (MMA)", category: "assurances", montantHt: "462.00", tauxTva: "0.00", recurrence: "monthly" },
+    { libelle: "URSSAF Île-de-France", category: "charges_sociales", montantHt: "5860.00", tauxTva: "0.00", recurrence: "monthly" },
+  ];
+  let chargeCount = 0;
+  for (const c of RECURRING) {
+    const existing = await db.query.recurringCharges.findFirst({
+      where: and(
+        eq(recurringCharges.organizationId, orgId),
+        eq(recurringCharges.libelle, c.libelle),
+      ),
+    });
+    if (existing) continue;
+    const nextDue = new Date();
+    nextDue.setMonth(nextDue.getMonth() + 1);
+    nextDue.setDate(5);
+    await db.insert(recurringCharges).values({
+      organizationId: orgId,
+      libelle: c.libelle,
+      category: c.category,
+      montantHt: c.montantHt,
+      tauxTva: c.tauxTva,
+      recurrence: c.recurrence,
+      nextDueDate: nextDue,
+      active: true,
+    });
+    chargeCount += 1;
+  }
+  void MOCK_BANK_ACCOUNT_IDS;
+
+  // EInvoice configuration mock Pennylane
+  const existingConfig = await db.query.einvoiceConfigurations.findFirst({
+    where: eq(einvoiceConfigurations.organizationId, orgId),
+  });
+  if (!existingConfig) {
+    await db.insert(einvoiceConfigurations).values({
+      organizationId: orgId,
+      provider: "pennylane",
+      externalOrgId: "mock-pennylane-org",
+      active: true,
+    });
+  }
+
+  console.log(
+    `✓ Trésorerie: ${accountsCreated} comptes connectés, ${txCount} transactions, ${autoReconciled} NH rapprochées auto, ${chargeCount} charges récurrentes${existingConfig ? "" : " · PDP Pennylane configurée"}`,
   );
 }
 
