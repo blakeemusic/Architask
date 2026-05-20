@@ -36,7 +36,7 @@ const TABS: {
   { key: "recap", label: "Récap", href: (id) => `/operations/${id}` },
   { key: "lots", label: "Lots", href: (id) => `/operations/${id}#lots` },
   { key: "cp", label: "CP", href: (id) => `/operations/${id}/cps` },
-  { key: "planning", label: "Planning", href: (id) => `/operations/${id}/planning`, disabled: true },
+  { key: "planning", label: "Planning", href: (id) => `/operations/${id}/planning` },
   { key: "cr", label: "CR chantier", href: (id) => `/operations/${id}/cr-chantier`, disabled: true },
   { key: "honoraires", label: "Honoraires", href: (id) => `/operations/${id}/honoraires`, locked: true },
   { key: "dgd", label: "DGD", href: (id) => `/operations/${id}/dgd` },

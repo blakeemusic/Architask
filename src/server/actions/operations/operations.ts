@@ -198,6 +198,27 @@ export async function createOperation(
         dateFinPrevue: input.dateReceptionCible,
         milestoneKind: "reception",
       });
+      // DGD ~ 60 jours après réception, libération RG 1 an après (NF P03-001).
+      const dgdDate = new Date(input.dateReceptionCible);
+      dgdDate.setDate(dgdDate.getDate() + 60);
+      const rgDate = new Date(input.dateReceptionCible);
+      rgDate.setFullYear(rgDate.getFullYear() + 1);
+      await db.insert(planningTasks).values({
+        operationId: row.id,
+        type: "jalon",
+        libelle: "DGD",
+        dateDebutPrevue: dgdDate,
+        dateFinPrevue: dgdDate,
+        milestoneKind: "dgd",
+      });
+      await db.insert(planningTasks).values({
+        operationId: row.id,
+        type: "jalon",
+        libelle: "Libération retenue de garantie",
+        dateDebutPrevue: rgDate,
+        dateFinPrevue: rgDate,
+        milestoneKind: "libere_retenue",
+      });
     }
 
     revalidatePath("/operations");

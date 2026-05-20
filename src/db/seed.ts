@@ -83,6 +83,73 @@ function daysFromToday(n: number): Date {
   return d;
 }
 
+/**
+ * Calcule la fenêtre prévue d'un lot en se basant sur la chronologie typique
+ * d'un chantier (gros œuvre → finitions). Permet d'étaler les barres du Gantt.
+ */
+function lotScheduleFromLibelle(
+  libelle: string,
+  opDateOs: Date,
+  opDateReception: Date,
+): { dateDebutPrevue: Date; dateFinPrevue: Date } {
+  const totalDays = Math.max(
+    30,
+    Math.round((opDateReception.getTime() - opDateOs.getTime()) / 86_400_000),
+  );
+  const profiles: Array<{ match: RegExp; startPct: number; durPct: number }> = [
+    { match: /gros\s?œuvre|maçonnerie|maconnerie/i, startPct: 0.0, durPct: 0.35 },
+    { match: /vrd|voirie/i, startPct: 0.05, durPct: 0.3 },
+    { match: /charpente/i, startPct: 0.28, durPct: 0.15 },
+    { match: /couverture/i, startPct: 0.38, durPct: 0.12 },
+    { match: /isolation/i, startPct: 0.42, durPct: 0.1 },
+    { match: /menuis/i, startPct: 0.45, durPct: 0.15 },
+    { match: /plomberie|cvc|ventilation/i, startPct: 0.5, durPct: 0.25 },
+    { match: /électric|electric|courant/i, startPct: 0.5, durPct: 0.25 },
+    { match: /cloisons|faux\s?plafond|fp\b/i, startPct: 0.58, durPct: 0.18 },
+    { match: /carrelage/i, startPct: 0.72, durPct: 0.15 },
+    { match: /peintures?|revêtements|revetements/i, startPct: 0.8, durPct: 0.15 },
+    { match: /espaces verts|aménagement|amenagement/i, startPct: 0.9, durPct: 0.08 },
+  ];
+  const profile = profiles.find((p) => p.match.test(libelle)) ?? {
+    startPct: 0.3,
+    durPct: 0.3,
+  };
+  const start = new Date(opDateOs);
+  start.setDate(start.getDate() + Math.round(totalDays * profile.startPct));
+  const end = new Date(start);
+  end.setDate(end.getDate() + Math.round(totalDays * profile.durPct));
+  // Garde-fou : pas après la réception cible.
+  const limit = new Date(opDateReception);
+  limit.setDate(limit.getDate() - 7);
+  if (end > limit) end.setTime(limit.getTime());
+  return { dateDebutPrevue: start, dateFinPrevue: end };
+}
+
+function computeRealDates(
+  prev: { dateDebutPrevue: Date; dateFinPrevue: Date },
+  now: Date,
+): {
+  dateDebutReelle: Date | null;
+  dateFinReelle: Date | null;
+  statut: "a_venir" | "en_cours" | "termine";
+} {
+  if (prev.dateFinPrevue <= now) {
+    return {
+      dateDebutReelle: prev.dateDebutPrevue,
+      dateFinReelle: prev.dateFinPrevue,
+      statut: "termine",
+    };
+  }
+  if (prev.dateDebutPrevue <= now) {
+    return {
+      dateDebutReelle: prev.dateDebutPrevue,
+      dateFinReelle: null,
+      statut: "en_cours",
+    };
+  }
+  return { dateDebutReelle: null, dateFinReelle: null, statut: "a_venir" };
+}
+
 // ---------------------------------------------------------------
 // Données
 // ---------------------------------------------------------------
@@ -631,7 +698,7 @@ async function seed() {
         .returning();
       opCount += 1;
 
-      // Jalons OS et Réception
+      // Jalons OS, Réception, DGD, libération retenue
       await db.insert(planningTasks).values({
         operationId: opRow.id,
         type: "jalon",
@@ -648,7 +715,27 @@ async function seed() {
         dateFinPrevue: op.dateReceptionCible,
         milestoneKind: "reception",
       });
-      planningTaskCount += 2;
+      const dgdDate = new Date(op.dateReceptionCible);
+      dgdDate.setDate(dgdDate.getDate() + 60);
+      await db.insert(planningTasks).values({
+        operationId: opRow.id,
+        type: "jalon",
+        libelle: "DGD",
+        dateDebutPrevue: dgdDate,
+        dateFinPrevue: dgdDate,
+        milestoneKind: "dgd",
+      });
+      const rgDate = new Date(op.dateReceptionCible);
+      rgDate.setFullYear(rgDate.getFullYear() + 1);
+      await db.insert(planningTasks).values({
+        operationId: opRow.id,
+        type: "jalon",
+        libelle: "Libération retenue de garantie",
+        dateDebutPrevue: rgDate,
+        dateFinPrevue: rgDate,
+        milestoneKind: "libere_retenue",
+      });
+      planningTaskCount += 4;
     }
 
     // Lots
@@ -678,16 +765,20 @@ async function seed() {
         })
         .returning();
       lotCount += 1;
-      // Planning task pour ce lot (dates contractuelles globales — l'user
-      // ajustera ensuite dans le sprint Planning).
+      // Planning task pour ce lot — fenêtre étalée selon chronologie typique,
+      // avec dates réelles déduites de today si la phase est passée.
+      const prev = lotScheduleFromLibelle(l.libelle, op.dateOs, op.dateReceptionCible);
+      const real = computeRealDates(prev, today);
       await db.insert(planningTasks).values({
         operationId: opRow.id,
         lotId: lotRow.id,
         type: "lot",
         libelle: `Lot ${l.numero} · ${l.libelle}`,
-        dateDebutPrevue: op.dateOs,
-        dateFinPrevue: op.dateReceptionCible,
-        statut: "en_cours",
+        dateDebutPrevue: prev.dateDebutPrevue,
+        dateFinPrevue: prev.dateFinPrevue,
+        dateDebutReelle: real.dateDebutReelle,
+        dateFinReelle: real.dateFinReelle,
+        statut: real.statut,
       });
       planningTaskCount += 1;
     }

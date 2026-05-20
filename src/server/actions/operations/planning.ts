@@ -99,6 +99,7 @@ export async function createPlanningTask(
       })
       .returning();
     revalidatePath(`/operations/${input.operationId}`);
+    revalidatePath(`/operations/${input.operationId}/planning`);
     return ok(row);
   });
 }
@@ -121,6 +122,7 @@ export async function updatePlanningTask(
       .where(eq(planningTasks.id, id))
       .returning();
     revalidatePath(`/operations/${existing.operation.id}`);
+    revalidatePath(`/operations/${existing.operation.id}/planning`);
     return ok(row);
   });
 }
@@ -135,8 +137,15 @@ export async function deletePlanningTask(
     });
     if (!existing || existing.operation.organizationId !== user.organizationId)
       return err("Tâche planning introuvable.", "not_found");
+    if (existing.type === "lot") {
+      return err(
+        "Impossible de supprimer une tâche de lot. Elle est liée à la signature du marché — supprime le lot lui-même si nécessaire.",
+        "lot_task_protected",
+      );
+    }
     await db.delete(planningTasks).where(eq(planningTasks.id, id));
     revalidatePath(`/operations/${existing.operation.id}`);
+    revalidatePath(`/operations/${existing.operation.id}/planning`);
     return ok({ id });
   });
 }
