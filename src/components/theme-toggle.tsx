@@ -1,30 +1,37 @@
 "use client";
 
 import * as React from "react";
+import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
 
-type Theme = "light" | "dark";
-
-const STORAGE_KEY = "architask-theme";
-
-// Observe l'attribut [data-theme] sur <html>. Évite le pattern
-// "setState dans useEffect" déconseillé en React 19.
-const subscribe = (callback: () => void) => {
-  const observer = new MutationObserver(callback);
+/**
+ * ThemeToggle — bouton dark/light branché sur next-themes.
+ *
+ * next-themes pose le bon data-theme sur <html> AVANT le premier paint
+ * (script généré par <ThemeProvider>), ce qui supprime tout flash blanc.
+ * On garde `data-theme` comme attribut pour rester compatible avec
+ * @custom-variant dark dans globals.css.
+ */
+// Lecture de data-theme côté client via useSyncExternalStore : aligne le
+// bouton sur ce que next-themes a posé sur <html> avant l'hydratation,
+// sans `setState` dans un useEffect (interdit par les règles React 19).
+const subscribe = (cb: () => void) => {
+  const observer = new MutationObserver(cb);
   observer.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["data-theme"],
   });
   return () => observer.disconnect();
 };
-
-const getSnapshot = (): Theme =>
-  (document.documentElement.dataset.theme as Theme) || "light";
-
-const getServerSnapshot = (): Theme => "light";
+const getSnapshot = (): "light" | "dark" =>
+  document.documentElement.getAttribute("data-theme") === "dark"
+    ? "dark"
+    : "light";
+const getServerSnapshot = (): "light" | "dark" => "light";
 
 export function ThemeToggle() {
+  const { setTheme } = useTheme();
   const theme = React.useSyncExternalStore(
     subscribe,
     getSnapshot,
@@ -32,13 +39,7 @@ export function ThemeToggle() {
   );
 
   const toggle = () => {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Privacy mode / quota — on continue, ce n'est pas critique.
-    }
+    setTheme(theme === "dark" ? "light" : "dark");
   };
 
   return (
@@ -93,16 +94,3 @@ export function ThemeToggle() {
     </Button>
   );
 }
-
-/**
- * Script inline à mettre dans <head> AVANT React.
- * Restaure le theme depuis localStorage pour éviter le flash blanc.
- */
-export const THEME_INIT_SCRIPT = `
-try {
-  var t = localStorage.getItem(${JSON.stringify(STORAGE_KEY)});
-  if (t === 'dark' || t === 'light') {
-    document.documentElement.dataset.theme = t;
-  }
-} catch (e) {}
-`;

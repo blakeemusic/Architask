@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SubNavCockpit } from "../../_components/sub-nav-cockpit";
 
 type ContractRow = {
   opId: string;
@@ -85,68 +85,9 @@ export function CockpitHonorairesClient({
     (a, b) => b.cumulFactureHt - a.cumulFactureHt,
   );
 
-  const showBientot = (label: string) => () =>
-    toast.info(`Bientôt — sprint ${label} à venir`);
-
   return (
     <>
-      {/* Sub-nav Cockpit */}
-      <div className="mb-8 flex items-center justify-between">
-        <SegmentedControl
-          value="honoraires"
-          onValueChange={() => {}}
-          options={[
-            { value: "honoraires", label: "Honoraires" },
-            { value: "tresorerie", label: "Trésorerie" },
-            { value: "rapprochement", label: "Rapprochement" },
-            { value: "facturation", label: "Facturation" },
-          ]}
-        />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={showBientot("Trésorerie")}
-            className="px-3 py-1.5 rounded-xl text-[12px] font-medium"
-            style={{
-              color: "var(--text-tertiary)",
-              background: "var(--surface-2)",
-            }}
-          >
-            Trésorerie · Bientôt
-          </button>
-          <button
-            type="button"
-            onClick={showBientot("Rapprochement")}
-            className="px-3 py-1.5 rounded-xl text-[12px] font-medium"
-            style={{
-              color: "var(--text-tertiary)",
-              background: "var(--surface-2)",
-            }}
-          >
-            Rapprochement · Bientôt
-          </button>
-          <span
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider"
-            style={{
-              background: "var(--text-primary)",
-              color: "var(--surface)",
-            }}
-          >
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            Accès Owner
-          </span>
-        </div>
-      </div>
+      <SubNavCockpit active="honoraires" />
 
       {/* Header */}
       <div className="flex items-end justify-between mb-10">

@@ -19,17 +19,8 @@ import {
 // Schémas
 // ---------------------------------------------------------------
 
-export const CHARGE_CATEGORIES = [
-  "salaires",
-  "charges_sociales",
-  "loyer_bureau",
-  "vehicules",
-  "logiciels",
-  "telecom",
-  "comptable",
-  "assurances",
-  "autres",
-] as const;
+// CHARGE_CATEGORIES vit dans src/lib/tresorerie-constants.ts —
+// les fichiers "use server" ne peuvent exporter que des async functions.
 
 const CreateChargeSchema = z.object({
   libelle: z.string().min(1).max(200),

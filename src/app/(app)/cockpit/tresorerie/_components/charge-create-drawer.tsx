@@ -14,10 +14,8 @@ import {
   DrawerHeader,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import {
-  CHARGE_CATEGORIES,
-  createRecurringCharge,
-} from "@/server/actions/tresorerie/charges";
+import { createRecurringCharge } from "@/server/actions/tresorerie/charges";
+import { CHARGE_CATEGORIES } from "@/lib/tresorerie-constants";
 
 const Schema = z.object({
   libelle: z.string().min(1, "Libellé obligatoire.").max(200),

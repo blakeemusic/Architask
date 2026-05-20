@@ -14,6 +14,7 @@ import {
   getOrganizationOwner,
 } from "@/lib/cockpit-access";
 
+import { SubNavCockpit } from "../_components/sub-nav-cockpit";
 import { CockpitHonorairesClient } from "./_components/cockpit-honoraires-client";
 import { CockpitRestrictedPanel } from "./_components/cockpit-restricted-panel";
 
@@ -24,6 +25,7 @@ export default async function CockpitHonorairesPage() {
     const owner = await getOrganizationOwner(user.organizationId);
     return (
       <div className="px-10 py-10 min-w-0 max-w-[1400px] mx-auto">
+        <SubNavCockpit active="honoraires" />
         <CockpitRestrictedPanel ownerName={owner?.name ?? null} />
       </div>
     );
